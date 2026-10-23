@@ -122,6 +122,8 @@ async function cargarFixture() {
           colorEscudo: visitante.colorEscudo,
           escudoUrl: visitante.escudoUrl,
         },
+        golesLocal: partido.goles_local,
+        golesVisitante: partido.goles_visitante,
       }
       const lista = porFecha.get(numero) ?? []
       lista.push(item)

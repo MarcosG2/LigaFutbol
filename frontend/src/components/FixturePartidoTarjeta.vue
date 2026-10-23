@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import EscudoEquipo from './EscudoEquipo.vue'
 
 export type EquipoFixtureTarjeta = {
@@ -15,11 +16,17 @@ export type PartidoFixtureTarjeta = {
   cancha: string
   local: EquipoFixtureTarjeta
   visitante: EquipoFixtureTarjeta
+  golesLocal: number | null
+  golesVisitante: number | null
 }
 
-defineProps<{
+const props = defineProps<{
   partido: PartidoFixtureTarjeta
 }>()
+
+const tieneResultado = computed(
+  () => props.partido.golesLocal !== null && props.partido.golesVisitante !== null,
+)
 </script>
 
 <template>
@@ -61,6 +68,13 @@ defineProps<{
         </div>
 
         <span
+          v-if="tieneResultado"
+          class="px-0.5 font-oswald text-xl font-black tabular-nums tracking-tight text-[#A3CF43] sm:text-2xl md:text-3xl"
+        >
+          {{ partido.golesLocal }} - {{ partido.golesVisitante }}
+        </span>
+        <span
+          v-else
           class="px-0.5 font-oswald text-xl font-black italic tracking-tight text-yellow-500 sm:text-2xl md:text-3xl"
         >
           VS
