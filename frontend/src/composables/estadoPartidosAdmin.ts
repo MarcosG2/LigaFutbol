@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import {
+  canchaDePartido,
   estadoPartidoApiAUi,
   estadoPartidoUiAApi,
   fechaHoraUiAIso,
@@ -48,8 +49,6 @@ export type NotificacionPartidoFinalizado = {
 }
 
 const CLAVE_NOTIFICACIONES_LEIDAS = 'plu-notificaciones-partidos-leidas'
-const CANCHA_UI = 'Cancha 1'
-
 export const fechasPartidosAdmin = ref<FechaTorneoAdmin[]>([])
 export const cargandoPartidosAdmin = ref(false)
 
@@ -96,7 +95,7 @@ function partidoApiAAdmin(partido: PartidoApi): PartidoAdmin {
     equipo_local_id: partido.equipo_local_id,
     equipo_visitante_id: partido.equipo_visitante_id,
     fecha_hora: fechaHoraUi,
-    cancha: CANCHA_UI,
+    cancha: canchaDePartido(partido.cancha),
     estado: estadoPartidoApiAUi(partido.estado),
     goles_local: partido.goles_local,
     goles_visitante: partido.goles_visitante,
@@ -196,6 +195,7 @@ export async function persistirFechaAdmin(
       goles_local: partido.goles_local,
       goles_visitante: partido.goles_visitante,
       fecha_hora: fechaHoraUiAIso(partido.fecha_hora),
+      cancha: canchaDePartido(partido.cancha),
       estado: estadoPartidoUiAApi(partido.estado),
       destacado_portada: partido.destacado_portada,
     }

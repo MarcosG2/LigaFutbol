@@ -65,6 +65,11 @@ export function estadoPartidoUiAApi(estado: EstadoPartidoUi): EstadoPartidoApi {
   return 'Pendiente'
 }
 
+export function canchaDePartido(cancha: string | null | undefined): string {
+  const valor = cancha?.trim()
+  return valor && valor.length > 0 ? valor : 'Cancha 1'
+}
+
 export function formatearFechaDia(fechaHora: string | null): string {
   if (!fechaHora) return '—'
   const fecha = new Date(fechaHora)

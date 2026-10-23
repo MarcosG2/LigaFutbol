@@ -18,6 +18,7 @@ export const esquemaCrearPartido = z
     goles_local: z.number().int().nonnegative().optional().nullable(),
     goles_visitante: z.number().int().nonnegative().optional().nullable(),
     fecha_hora: z.coerce.date().optional().nullable(),
+    cancha: z.string().trim().min(1).max(100).optional().default("Cancha 1"),
     estado: estadoPartidoEnum.optional().default("Pendiente"),
     destacado_portada: z.boolean().optional().default(false),
   })
@@ -36,6 +37,7 @@ export const esquemaActualizarPartido = z
     goles_local: z.number().int().nonnegative().optional().nullable(),
     goles_visitante: z.number().int().nonnegative().optional().nullable(),
     fecha_hora: z.coerce.date().optional().nullable(),
+    cancha: z.string().trim().min(1).max(100).optional(),
     estado: estadoPartidoEnum.optional(),
     destacado_portada: z.boolean().optional(),
   })
@@ -49,6 +51,7 @@ export const esquemaActualizarPartido = z
       datos.goles_local !== undefined ||
       datos.goles_visitante !== undefined ||
       datos.fecha_hora !== undefined ||
+      datos.cancha !== undefined ||
       datos.estado !== undefined ||
       datos.destacado_portada !== undefined,
     { message: "Debe enviar al menos un campo para actualizar" }

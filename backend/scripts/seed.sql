@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS `Partidos` (
   `goles_local` int DEFAULT '0',
   `goles_visitante` int DEFAULT '0',
   `fecha_hora` datetime DEFAULT NULL,
+  `cancha` varchar(100) NOT NULL DEFAULT 'Cancha 1',
   `estado` enum('Pendiente','Jugado','Suspendido') DEFAULT 'Pendiente',
   `destacado_portada` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),

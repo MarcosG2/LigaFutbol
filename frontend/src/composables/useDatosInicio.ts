@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { listarEquipos } from '../api/equiposApi'
 import {
+  canchaDePartido,
   formatearFechaDia,
   formatearHora,
   mapaEquiposPorId,
@@ -103,7 +104,7 @@ export function useDatosInicio() {
           local,
           visitante,
           hora: `${formatearFechaDia(partido.fecha_hora).toUpperCase()} ${formatearHora(partido.fecha_hora)}`,
-          cancha: 'CANCHA 1',
+          cancha: canchaDePartido(partido.cancha).toUpperCase(),
           fechaNumero: partido.numero_fecha ?? 0,
         }
       })

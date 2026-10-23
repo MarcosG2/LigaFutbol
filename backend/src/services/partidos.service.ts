@@ -7,11 +7,17 @@ import type {
 import type { Partido } from "../types/entidades.js";
 
 const columnasSelect =
-  "id, torneo_id, numero_fecha, numero_partido, equipo_local_id, equipo_visitante_id, goles_local, goles_visitante, fecha_hora, estado, destacado_portada";
+  "id, torneo_id, numero_fecha, numero_partido, equipo_local_id, equipo_visitante_id, goles_local, goles_visitante, fecha_hora, cancha, estado, destacado_portada";
 
 function filaAPartido(fila: RowDataPacket): Partido {
+  const canchaRaw = fila.cancha as string | null | undefined;
+  const cancha =
+    typeof canchaRaw === "string" && canchaRaw.trim().length > 0
+      ? canchaRaw.trim()
+      : "Cancha 1";
   return {
     ...(fila as Partido),
+    cancha,
     destacado_portada: Boolean(fila.destacado_portada),
   };
 }
@@ -66,6 +72,7 @@ export async function crearPartido(datos: DatosCrearPartido): Promise<Partido> {
     goles_local,
     goles_visitante,
     fecha_hora,
+    cancha = "Cancha 1",
     estado,
     destacado_portada = false,
   } = datos;
@@ -77,8 +84,8 @@ export async function crearPartido(datos: DatosCrearPartido): Promise<Partido> {
   const [resultado] = await pool.execute<ResultSetHeader>(
     `INSERT INTO Partidos (
       torneo_id, numero_fecha, numero_partido, equipo_local_id, equipo_visitante_id,
-      goles_local, goles_visitante, fecha_hora, estado, destacado_portada
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      goles_local, goles_visitante, fecha_hora, cancha, estado, destacado_portada
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       torneo_id,
       numero_fecha ?? null,
@@ -88,6 +95,7 @@ export async function crearPartido(datos: DatosCrearPartido): Promise<Partido> {
       goles_local ?? null,
       goles_visitante ?? null,
       fecha_hora ?? null,
+      cancha,
       estado,
       destacado_portada ? 1 : 0,
     ]
@@ -138,6 +146,10 @@ export async function actualizarPartido(
   if (datos.fecha_hora !== undefined) {
     asignaciones.push("fecha_hora = ?");
     valores.push(datos.fecha_hora);
+  }
+  if (datos.cancha !== undefined) {
+    asignaciones.push("cancha = ?");
+    valores.push(datos.cancha);
   }
   if (datos.estado !== undefined) {
     asignaciones.push("estado = ?");

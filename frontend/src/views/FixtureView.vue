@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { listarEquipos } from '../api/equiposApi'
 import {
+  canchaDePartido,
   formatearFechaDia,
   formatearHora,
   mapaEquiposPorId,
@@ -109,7 +110,7 @@ async function cargarFixture() {
         id: partido.id,
         fechaDia: formatearFechaDia(partido.fecha_hora),
         hora: formatearHora(partido.fecha_hora),
-        cancha: 'Cancha 1',
+        cancha: canchaDePartido(partido.cancha),
         local: {
           nombre: local.nombre,
           iniciales: local.iniciales,

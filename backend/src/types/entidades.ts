@@ -42,6 +42,7 @@ export interface Partido {
   goles_local: number | null;
   goles_visitante: number | null;
   fecha_hora: Date | null;
+  cancha: string;
   estado: EstadoPartido | null;
   destacado_portada: boolean;
 }

@@ -39,6 +39,7 @@ export interface PartidoApi {
   goles_local: number | null
   goles_visitante: number | null
   fecha_hora: string | null
+  cancha: string | null
   estado: EstadoPartidoApi | null
   destacado_portada: boolean
 }
