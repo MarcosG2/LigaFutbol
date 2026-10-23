@@ -3,6 +3,7 @@ import { pool } from "../db/db.js";
 import type {
   DatosActualizarEquipo,
   DatosCrearEquipo,
+  JugadorPlantillaEquipo,
 } from "../schemas/equipos.schema.js";
 import type { Equipo } from "../types/entidades.js";
 
@@ -27,8 +28,63 @@ export async function obtenerEquipoPorId(id: number): Promise<Equipo | null> {
   return buscarEquipoPorId(id);
 }
 
-export async function crearEquipo(datos: DatosCrearEquipo): Promise<Equipo> {
+async function insertarEquipoConPlantilla(
+  datos: Omit<DatosCrearEquipo, "jugadores">,
+  jugadores: JugadorPlantillaEquipo[]
+): Promise<Equipo> {
   const { nombre, escudo_url, instagram, estado } = datos;
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+
+    const [resultadoEquipo] = await conexion.execute<ResultSetHeader>(
+      `INSERT INTO Equipos (nombre, escudo_url, instagram, estado) VALUES (?, ?, ?, ?)`,
+      [nombre, escudo_url, instagram, estado]
+    );
+
+    const equipoId = resultadoEquipo.insertId;
+
+    const filasInsert = jugadores.map((jugador) => [
+      equipoId,
+      jugador.nombre,
+      jugador.numero_camiseta,
+      null,
+    ]);
+
+    await conexion.query(
+      `INSERT INTO Jugadores (equipo_id, nombre, numero_camiseta, goles) VALUES ?`,
+      [filasInsert]
+    );
+
+    await conexion.commit();
+
+    const [filasEquipo] = await pool.execute<RowDataPacket[]>(
+      `SELECT ${columnasSelect} FROM Equipos WHERE id = ?`,
+      [equipoId]
+    );
+
+    if (filasEquipo.length === 0) {
+      throw new Error("No se pudo recuperar el equipo creado");
+    }
+
+    return filasEquipo[0] as Equipo;
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
+}
+
+export async function crearEquipo(datos: DatosCrearEquipo): Promise<Equipo> {
+  const { jugadores, ...datosEquipo } = datos;
+
+  if (jugadores && jugadores.length > 0) {
+    return insertarEquipoConPlantilla(datosEquipo, jugadores);
+  }
+
+  const { nombre, escudo_url, instagram, estado } = datosEquipo;
 
   const [resultado] = await pool.execute<ResultSetHeader>(
     `INSERT INTO Equipos (nombre, escudo_url, instagram, estado) VALUES (?, ?, ?, ?)`,

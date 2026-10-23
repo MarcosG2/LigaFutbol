@@ -39,6 +39,7 @@ const TIPOS_ESCUDO_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp', 'image
 const equipos = ref<Equipo[]>([])
 const jugadoresPorEquipo = ref<Map<number, JugadorApi[]>>(new Map())
 const cargando = ref(false)
+const guardando = ref(false)
 
 const busqueda = ref('')
 const modalAbierto = ref(false)
@@ -178,6 +179,7 @@ function abrirModalEditar(equipo: Equipo) {
 }
 
 function cerrarModal() {
+  if (guardando.value) return
   modalAbierto.value = false
   equipoActual.value = equipoVacio()
   escudoArchivoPendiente.value = null
@@ -412,6 +414,8 @@ async function guardarEquipo() {
     return
   }
 
+  guardando.value = true
+  let guardadoOk = false
   try {
     const datosEquipo: {
       nombre: string
@@ -426,11 +430,20 @@ async function guardarEquipo() {
       datosEquipo.escudo_url = null
     }
 
+    const jugadoresPayload = equipoActual.value.jugadores.map((j) => ({
+      nombre: j.nombre,
+      numero_camiseta: j.dorsal,
+    }))
+
     let equipoId = equipoActual.value.id
     if (equipoId) {
       await actualizarEquipo(equipoId, datosEquipo)
+      await sincronizarPlantilla(equipoId, equipoActual.value.jugadores)
     } else {
-      const creado = await crearEquipo(datosEquipo)
+      const creado = await crearEquipo({
+        ...datosEquipo,
+        jugadores: jugadoresPayload,
+      })
       equipoId = creado.id
     }
 
@@ -438,11 +451,16 @@ async function guardarEquipo() {
       await subirEscudoEquipo(equipoId, escudoArchivoPendiente.value)
     }
 
-    await sincronizarPlantilla(equipoId, equipoActual.value.jugadores)
     await cargarEquiposDesdeApi()
-    cerrarModal()
+    guardadoOk = true
   } catch {
     window.alert('No se pudo guardar el equipo.')
+  } finally {
+    guardando.value = false
+  }
+
+  if (guardadoOk) {
+    cerrarModal()
   }
 }
 
@@ -635,8 +653,9 @@ onMounted(() => {
             </div>
             <button
               type="button"
-              class="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+              class="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white disabled:opacity-50"
               aria-label="Cerrar"
+              :disabled="guardando"
               @click="cerrarModal"
             >
               <svg
@@ -904,18 +923,71 @@ onMounted(() => {
           <footer
             class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-800/80 px-6 py-4"
           >
+            <p
+              v-if="guardando"
+              class="mr-auto flex items-center gap-2 text-sm text-zinc-400"
+              role="status"
+              aria-live="polite"
+            >
+              <svg
+                class="h-4 w-4 animate-spin text-yellow-400"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              Guardando equipo y plantilla…
+            </p>
             <button
               type="button"
-              class="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+              class="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800 disabled:opacity-50"
+              :disabled="guardando"
               @click="cerrarModal"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              class="rounded-lg bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-4 py-2 text-sm font-bold text-black shadow-lg shadow-yellow-500/20 transition-[filter] hover:brightness-105"
+              class="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-4 py-2 text-sm font-bold text-black shadow-lg shadow-yellow-500/20 transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="guardando"
             >
-              Guardar equipo
+              <svg
+                v-if="guardando"
+                class="h-4 w-4 animate-spin"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              {{ guardando ? 'Guardando…' : 'Guardar equipo' }}
             </button>
           </footer>
         </form>

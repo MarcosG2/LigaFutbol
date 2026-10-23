@@ -5,11 +5,17 @@ export async function listarEquipos(): Promise<EquipoApi[]> {
   return solicitar<EquipoApi[]>('/equipos')
 }
 
+export type JugadorPlantillaEquipoApi = {
+  nombre: string
+  numero_camiseta: number
+}
+
 export async function crearEquipo(datos: {
   nombre: string
   escudo_url?: string | null
   instagram?: string | null
   estado?: 'Activo' | 'Inactivo'
+  jugadores?: JugadorPlantillaEquipoApi[]
 }): Promise<EquipoApi> {
   return solicitar<EquipoApi>('/equipos', { method: 'POST', body: datos })
 }
