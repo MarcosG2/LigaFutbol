@@ -13,7 +13,7 @@ app.use(cors(opcionesCors));
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+  res.status(200).json({ status: "ok", uptime: process.uptime() });
 });
 
 app.use("/api", routerApi);
