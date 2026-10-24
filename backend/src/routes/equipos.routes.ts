@@ -7,6 +7,7 @@ import {
   listarEquipos,
   obtenerEquipoPorId,
   actualizarEquipo,
+  sincronizarPlantillaEquipo,
 } from "../controllers/equipos.controller.js";
 import { autenticarJwt } from "../middlewares/autenticarJwt.js";
 import { subirEscudo } from "../middlewares/subirEscudo.js";
@@ -34,6 +35,7 @@ routerEquipos.post(
   cargarEscudoEquipo
 );
 routerEquipos.post("/", autenticarJwt, crearEquipo);
+routerEquipos.put("/:id/plantilla", autenticarJwt, sincronizarPlantillaEquipo);
 routerEquipos.put("/:id", autenticarJwt, actualizarEquipo);
 routerEquipos.delete("/:id", autenticarJwt, eliminarEquipo);
 

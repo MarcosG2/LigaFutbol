@@ -1,11 +1,12 @@
 import { solicitar } from './cliente'
-import type { EquipoApi } from './tipos'
+import type { EquipoApi, JugadorApi } from './tipos'
 
 export async function listarEquipos(): Promise<EquipoApi[]> {
   return solicitar<EquipoApi[]>('/equipos')
 }
 
 export type JugadorPlantillaEquipoApi = {
+  id?: number
   nombre: string
   numero_camiseta: number
 }
@@ -30,6 +31,16 @@ export async function actualizarEquipo(
   }>,
 ): Promise<EquipoApi> {
   return solicitar<EquipoApi>(`/equipos/${id}`, { method: 'PUT', body: datos })
+}
+
+export async function sincronizarPlantillaEquipo(
+  id: number,
+  jugadores: JugadorPlantillaEquipoApi[],
+): Promise<JugadorApi[]> {
+  return solicitar<JugadorApi[]>(`/equipos/${id}/plantilla`, {
+    method: 'PUT',
+    body: { jugadores },
+  })
 }
 
 export async function eliminarEquipo(id: number): Promise<void> {

@@ -13,6 +13,10 @@ export const esquemaJugadorPlantillaEquipo = z.object({
     .positive("El número de camiseta debe ser mayor a cero"),
 });
 
+export const esquemaJugadorPlantillaSincronizar = esquemaJugadorPlantillaEquipo.extend({
+  id: z.coerce.number().int().positive().optional(),
+});
+
 const cadenaOpcional = (max: number) =>
   z
     .string()
@@ -57,11 +61,35 @@ export const esquemaActualizarEquipo = z
     { message: "Debe enviar al menos un campo para actualizar" }
   );
 
+const plantillaConDorsalesUnicos = (
+  jugadores: { numero_camiseta: number }[]
+) => {
+  const dorsales = jugadores.map((jugador) => jugador.numero_camiseta);
+  return new Set(dorsales).size === dorsales.length;
+};
+
+export const esquemaSincronizarPlantilla = z.object({
+  jugadores: z
+    .array(esquemaJugadorPlantillaSincronizar)
+    .min(MIN_JUGADORES_PLANTILLA, `La plantilla requiere al menos ${MIN_JUGADORES_PLANTILLA} jugadores`)
+    .max(MAX_JUGADORES_PLANTILLA, `La plantilla no puede superar ${MAX_JUGADORES_PLANTILLA} jugadores`)
+    .refine(plantillaConDorsalesUnicos, { message: "Hay dorsales duplicados en la plantilla" })
+    .refine(
+      (jugadores) => {
+        const ids = jugadores.flatMap((jugador) => (jugador.id !== undefined ? [jugador.id] : []));
+        return new Set(ids).size === ids.length;
+      },
+      { message: "Hay jugadores repetidos en la plantilla" }
+    ),
+});
+
 export const esquemaIdEquipo = z.coerce
   .number()
   .int("El id debe ser un entero")
   .positive("El id debe ser mayor a cero");
 
 export type JugadorPlantillaEquipo = z.infer<typeof esquemaJugadorPlantillaEquipo>;
+export type JugadorPlantillaSincronizar = z.infer<typeof esquemaJugadorPlantillaSincronizar>;
 export type DatosCrearEquipo = z.infer<typeof esquemaCrearEquipo>;
 export type DatosActualizarEquipo = z.infer<typeof esquemaActualizarEquipo>;
+export type DatosSincronizarPlantilla = z.infer<typeof esquemaSincronizarPlantilla>;

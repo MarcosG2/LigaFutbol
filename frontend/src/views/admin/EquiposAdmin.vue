@@ -6,20 +6,19 @@ import {
   crearEquipo,
   eliminarEquipo,
   listarEquipos,
+  sincronizarPlantillaEquipo,
   subirEscudoEquipo,
 } from '../../api/equiposApi'
-import {
-  crearJugador,
-  eliminarJugador,
-  listarJugadores,
-} from '../../api/jugadoresApi'
+import { listarJugadores } from '../../api/jugadoresApi'
 import type { JugadorApi } from '../../api/tipos'
+import { ErrorApi } from '../../api/cliente'
 import { optimizarImagenEscudo } from '../../utils/optimizarImagenEscudo'
 
 const MIN_JUGADORES = 11
 const MAX_JUGADORES = 28
 
 type Jugador = {
+  id?: number
   nombre: string
   dorsal: number
 }
@@ -31,13 +30,10 @@ type Equipo = {
   jugadores: Jugador[]
 }
 
-type JugadorPersistido = Jugador & { id?: number }
-
 const TAMANO_MAX_ESCUDO_MB = 2
 const TIPOS_ESCUDO_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']
 
 const equipos = ref<Equipo[]>([])
-const jugadoresPorEquipo = ref<Map<number, JugadorApi[]>>(new Map())
 const cargando = ref(false)
 const guardando = ref(false)
 
@@ -353,20 +349,33 @@ async function importarExcel(event: Event) {
   }
 }
 
-async function sincronizarPlantilla(equipoId: number, jugadores: JugadorPersistido[]) {
-  const actuales = jugadoresPorEquipo.value.get(equipoId) ?? []
+function jugadoresDesdeApi(lista: JugadorApi[]): Jugador[] {
+  return lista.map((jugador) => ({
+    id: jugador.id,
+    nombre: jugador.nombre,
+    dorsal: jugador.numero_camiseta ?? 0,
+  }))
+}
 
-  for (const jugador of actuales) {
-    await eliminarJugador(jugador.id)
-  }
+function plantillaModificada(original: Jugador[], actual: Jugador[]): boolean {
+  if (actual.some((jugador) => jugador.id === undefined)) return true
+  if (original.length !== actual.length) return true
 
-  for (const jugador of jugadores) {
-    await crearJugador({
-      equipo_id: equipoId,
-      nombre: jugador.nombre,
-      numero_camiseta: jugador.dorsal,
-    })
+  const porId = new Map(original.map((jugador) => [jugador.id, jugador]))
+  return actual.some((jugador) => {
+    const previo = porId.get(jugador.id)
+    return !previo || previo.nombre !== jugador.nombre || previo.dorsal !== jugador.dorsal
+  })
+}
+
+function aplicarEquipoEnLista(equipo: Equipo) {
+  const indice = equipos.value.findIndex((item) => item.id === equipo.id)
+  if (indice === -1) {
+    equipos.value.push(equipo)
+  } else {
+    equipos.value[indice] = equipo
   }
+  equipos.value.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 }
 
 async function cargarEquiposDesdeApi() {
@@ -383,16 +392,12 @@ async function cargarEquiposDesdeApi() {
       lista.push(jugador)
       mapa.set(jugador.equipo_id, lista)
     }
-    jugadoresPorEquipo.value = mapa
 
     equipos.value = listaEquipos.map((equipo) => ({
       id: equipo.id,
       nombre: equipo.nombre,
       escudoUrl: equipo.escudo_url,
-      jugadores: (mapa.get(equipo.id) ?? []).map((j) => ({
-        nombre: j.nombre,
-        dorsal: j.numero_camiseta ?? 0,
-      })),
+      jugadores: jugadoresDesdeApi(mapa.get(equipo.id) ?? []),
     }))
   } catch {
     window.alert('No se pudieron cargar los equipos.')
@@ -417,44 +422,68 @@ async function guardarEquipo() {
   guardando.value = true
   let guardadoOk = false
   try {
-    const datosEquipo: {
-      nombre: string
-      estado: 'Activo'
-      escudo_url?: string | null
-    } = {
-      nombre,
-      estado: 'Activo',
-    }
-
-    if (escudoMarcadoParaEliminar.value && !escudoArchivoPendiente.value) {
-      datosEquipo.escudo_url = null
-    }
-
-    const jugadoresPayload = equipoActual.value.jugadores.map((j) => ({
-      nombre: j.nombre,
-      numero_camiseta: j.dorsal,
+    const jugadoresPayload = equipoActual.value.jugadores.map((jugador) => ({
+      ...(jugador.id !== undefined ? { id: jugador.id } : {}),
+      nombre: jugador.nombre,
+      numero_camiseta: jugador.dorsal,
     }))
 
     let equipoId = equipoActual.value.id
+    let escudoUrl = equipoActual.value.escudoUrl
+    let jugadoresGuardados = equipoActual.value.jugadores.map((jugador) => ({ ...jugador }))
+
     if (equipoId) {
-      await actualizarEquipo(equipoId, datosEquipo)
-      await sincronizarPlantilla(equipoId, equipoActual.value.jugadores)
+      const original = equipos.value.find((equipo) => equipo.id === equipoId)
+      const nombreCambio = original?.nombre !== nombre
+      const quitarEscudo = escudoMarcadoParaEliminar.value && !escudoArchivoPendiente.value
+      const plantillaCambio = plantillaModificada(
+        original?.jugadores ?? [],
+        equipoActual.value.jugadores,
+      )
+
+      if (nombreCambio || quitarEscudo) {
+        const actualizado = await actualizarEquipo(equipoId, {
+          ...(nombreCambio ? { nombre } : {}),
+          ...(quitarEscudo ? { escudo_url: null } : {}),
+        })
+        escudoUrl = actualizado.escudo_url
+      } else if (original) {
+        escudoUrl = original.escudoUrl
+      }
+
+      if (plantillaCambio) {
+        const plantilla = await sincronizarPlantillaEquipo(equipoId, jugadoresPayload)
+        jugadoresGuardados = jugadoresDesdeApi(plantilla)
+      }
     } else {
       const creado = await crearEquipo({
-        ...datosEquipo,
-        jugadores: jugadoresPayload,
+        nombre,
+        estado: 'Activo',
+        jugadores: jugadoresPayload.map(({ nombre: nombreJugador, numero_camiseta }) => ({
+          nombre: nombreJugador,
+          numero_camiseta,
+        })),
       })
       equipoId = creado.id
+      escudoUrl = creado.escudo_url
+      jugadoresGuardados = jugadoresDesdeApi(await listarJugadores(equipoId))
     }
 
     if (escudoArchivoPendiente.value) {
-      await subirEscudoEquipo(equipoId, escudoArchivoPendiente.value)
+      const conEscudo = await subirEscudoEquipo(equipoId, escudoArchivoPendiente.value)
+      escudoUrl = conEscudo.escudo_url
     }
 
-    await cargarEquiposDesdeApi()
+    aplicarEquipoEnLista({
+      id: equipoId,
+      nombre,
+      escudoUrl,
+      jugadores: jugadoresGuardados,
+    })
     guardadoOk = true
-  } catch {
-    window.alert('No se pudo guardar el equipo.')
+  } catch (error) {
+    const mensaje = error instanceof ErrorApi ? error.message : 'No se pudo guardar el equipo.'
+    window.alert(mensaje)
   } finally {
     guardando.value = false
   }

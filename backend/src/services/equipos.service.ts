@@ -4,8 +4,16 @@ import type {
   DatosActualizarEquipo,
   DatosCrearEquipo,
   JugadorPlantillaEquipo,
+  JugadorPlantillaSincronizar,
 } from "../schemas/equipos.schema.js";
-import type { Equipo } from "../types/entidades.js";
+import type { Equipo, Jugador } from "../types/entidades.js";
+
+export class ErrorPlantillaEquipo extends Error {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = "ErrorPlantillaEquipo";
+  }
+}
 
 const columnasSelect = "id, nombre, escudo_url, instagram, estado";
 
@@ -132,6 +140,106 @@ export async function actualizarEquipo(
   }
 
   return buscarEquipoPorId(id);
+}
+
+export async function sincronizarPlantillaEquipo(
+  equipoId: number,
+  jugadores: JugadorPlantillaSincronizar[]
+): Promise<Jugador[] | null> {
+  const conexion = await pool.getConnection();
+
+  try {
+    await conexion.beginTransaction();
+
+    const [filasEquipo] = await conexion.execute<RowDataPacket[]>(
+      `SELECT id FROM Equipos WHERE id = ? FOR UPDATE`,
+      [equipoId]
+    );
+
+    if (filasEquipo.length === 0) {
+      await conexion.rollback();
+      return null;
+    }
+
+    const [filasActuales] = await conexion.execute<RowDataPacket[]>(
+      `SELECT id, equipo_id, nombre, numero_camiseta, goles
+       FROM Jugadores
+       WHERE equipo_id = ?
+       FOR UPDATE`,
+      [equipoId]
+    );
+
+    const actuales = filasActuales as Jugador[];
+    const idsActuales = new Set(actuales.map((jugador) => jugador.id));
+    const porId = new Map(actuales.map((jugador) => [jugador.id, jugador]));
+
+    for (const jugador of jugadores) {
+      if (jugador.id !== undefined && !idsActuales.has(jugador.id)) {
+        throw new ErrorPlantillaEquipo("Hay un jugador que no pertenece a este equipo");
+      }
+    }
+
+    const idsConservados = new Set(
+      jugadores.flatMap((jugador) => (jugador.id !== undefined ? [jugador.id] : []))
+    );
+    const idsAEliminar = actuales
+      .map((jugador) => jugador.id)
+      .filter((id) => !idsConservados.has(id));
+
+    if (idsAEliminar.length > 0) {
+      const marcadores = idsAEliminar.map(() => "?").join(", ");
+      await conexion.execute(
+        `DELETE FROM Jugadores WHERE equipo_id = ? AND id IN (${marcadores})`,
+        [equipoId, ...idsAEliminar]
+      );
+    }
+
+    for (const jugador of jugadores) {
+      if (jugador.id === undefined) continue;
+
+      const actual = porId.get(jugador.id);
+      if (!actual) continue;
+      if (actual.nombre === jugador.nombre && actual.numero_camiseta === jugador.numero_camiseta) {
+        continue;
+      }
+
+      await conexion.execute(
+        `UPDATE Jugadores SET nombre = ?, numero_camiseta = ? WHERE id = ? AND equipo_id = ?`,
+        [jugador.nombre, jugador.numero_camiseta, jugador.id, equipoId]
+      );
+    }
+
+    const nuevos = jugadores.filter((jugador) => jugador.id === undefined);
+    if (nuevos.length > 0) {
+      const filasInsert = nuevos.map((jugador) => [
+        equipoId,
+        jugador.nombre,
+        jugador.numero_camiseta,
+        0,
+      ]);
+
+      await conexion.query(
+        `INSERT INTO Jugadores (equipo_id, nombre, numero_camiseta, goles) VALUES ?`,
+        [filasInsert]
+      );
+    }
+
+    const [filasResultado] = await conexion.execute<RowDataPacket[]>(
+      `SELECT id, equipo_id, nombre, numero_camiseta, goles
+       FROM Jugadores
+       WHERE equipo_id = ?
+       ORDER BY numero_camiseta ASC, nombre ASC`,
+      [equipoId]
+    );
+
+    await conexion.commit();
+    return filasResultado as Jugador[];
+  } catch (error) {
+    await conexion.rollback();
+    throw error;
+  } finally {
+    conexion.release();
+  }
 }
 
 export async function actualizarEscudoUrl(

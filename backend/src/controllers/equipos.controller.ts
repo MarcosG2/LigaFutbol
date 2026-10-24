@@ -4,6 +4,7 @@ import {
   esquemaActualizarEquipo,
   esquemaCrearEquipo,
   esquemaIdEquipo,
+  esquemaSincronizarPlantilla,
 } from "../schemas/equipos.schema.js";
 import * as archivosService from "../services/archivos.service.js";
 import * as equiposService from "../services/equipos.service.js";
@@ -87,6 +88,33 @@ export async function actualizarEquipo(req: Request, res: Response): Promise<voi
   } catch (error) {
     console.error(error);
     res.status(500).json({ mensaje: "Error al actualizar el equipo" });
+  }
+}
+
+export async function sincronizarPlantillaEquipo(req: Request, res: Response): Promise<void> {
+  const id = parsearIdParam(req, res);
+  if (id === null) return;
+
+  const parseo = esquemaSincronizarPlantilla.safeParse(req.body);
+  if (!parseo.success) {
+    responderErrorValidacion(res, parseo.error);
+    return;
+  }
+
+  try {
+    const jugadores = await equiposService.sincronizarPlantillaEquipo(id, parseo.data.jugadores);
+    if (!jugadores) {
+      res.status(404).json({ mensaje: "Equipo no encontrado" });
+      return;
+    }
+    res.json(jugadores);
+  } catch (error) {
+    if (error instanceof equiposService.ErrorPlantillaEquipo) {
+      res.status(400).json({ mensaje: error.message });
+      return;
+    }
+    console.error(error);
+    res.status(500).json({ mensaje: "Error al actualizar la plantilla" });
   }
 }
 
