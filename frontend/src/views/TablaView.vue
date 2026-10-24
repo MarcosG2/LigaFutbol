@@ -1,32 +1,30 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { estadioUrl } from '../assets/imagenes'
-import EscudoEquipo from '../components/EscudoEquipo.vue'
+import TablaRegularPanel from '../components/tabla/TablaRegularPanel.vue'
+import { POSICIONES_PLAYOFF } from '../components/home/homeTablaZonas'
 import { useTablaPosiciones } from '../composables/useTablaPosiciones'
 
-const POSICIONES_PLAYOFF = 6
-
-const faseSeleccionada = ref('regular')
+const faseSeleccionada = ref<'regular' | 'playoffs'>('regular')
 const faseHabilitada = ref(true)
 
 const octavos = Array.from({ length: 8 }, (_, i) => i + 1)
 const cuartos = Array.from({ length: 4 }, (_, i) => i + 1)
 const semis = Array.from({ length: 2 }, (_, i) => i + 1)
 
-const { filas, cargarTabla } = useTablaPosiciones()
+const { filas, cargando, error, cargarTabla } = useTablaPosiciones()
 const equiposTabla = computed(() => filas.value)
+const cantidadEquipos = computed(() => filas.value.length)
+
+const liderNombre = computed(() => filas.value[0]?.equipo.nombre ?? null)
 
 onMounted(() => {
   cargarTabla()
 })
 
-function clasesPosicion(posicion: number): string {
-  if (posicion <= POSICIONES_PLAYOFF) {
-    return 'bg-green-600/20 text-green-400'
-  }
-  return 'bg-red-600/20 text-red-400'
+function seleccionarFase(fase: 'regular' | 'playoffs') {
+  faseSeleccionada.value = fase
 }
-
 </script>
 
 <template>
@@ -37,166 +35,111 @@ function clasesPosicion(posicion: number): string {
       aria-hidden="true"
     />
     <div
-      class="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-black/70 via-black/80 to-zinc-950/95"
+      class="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-black/70 via-black/80 to-slate-950/95"
       aria-hidden="true"
     />
 
-    <section class="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
-      <header class="mb-8">
+    <section class="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+      <header class="mb-6 sm:mb-8">
+        <div class="flex flex-wrap gap-2">
+          <span
+            class="inline-flex items-center rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-[10px] font-bold tracking-wider text-yellow-300 uppercase"
+          >
+            Pro League Universitaria
+          </span>
+          <span
+            v-if="cantidadEquipos > 0"
+            class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-wider text-white/80 uppercase"
+          >
+            {{ cantidadEquipos }} equipos
+          </span>
+          <span
+            class="inline-flex items-center rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold tracking-wider text-emerald-200 uppercase"
+          >
+            Top {{ POSICIONES_PLAYOFF }} a playoffs
+          </span>
+          <span
+            v-if="liderNombre"
+            class="inline-flex max-w-[14rem] items-center truncate rounded-full border border-yellow-400/20 bg-yellow-400/5 px-3 py-1 text-[10px] font-bold tracking-wider text-yellow-200 uppercase"
+          >
+            Líder: {{ liderNombre }}
+          </span>
+        </div>
+
         <h1
-          class="titulo-pincel font-oswald text-4xl font-black uppercase italic tracking-tight text-yellow-400 sm:text-5xl md:text-6xl"
+          class="titulo-pincel mt-4 font-oswald text-4xl font-black uppercase italic tracking-tight text-yellow-400 sm:text-5xl md:text-6xl"
         >
           Tabla de posiciones
         </h1>
 
         <div
-          class="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+          class="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <p
-            class="font-oswald text-base font-medium uppercase italic tracking-[0.12em] text-white/90 sm:text-lg sm:tracking-[0.25em]"
+            class="max-w-md text-sm text-slate-400 sm:text-base"
           >
-            Pro League Universitaria
+            Clasificación actual del torneo. En mobile podés ver cada equipo en tarjetas; en
+            pantallas grandes, la tabla completa.
           </p>
 
-          <div class="relative w-full sm:w-auto sm:min-w-[220px]">
-            <label for="fase-torneo" class="sr-only">Fase del torneo</label>
-            <select
-              id="fase-torneo"
-              v-model="faseSeleccionada"
-              class="w-full appearance-none rounded-lg border border-zinc-700 bg-zinc-900/90 py-2.5 pl-4 pr-10 font-oswald text-sm font-semibold uppercase tracking-wider text-white transition-colors hover:border-zinc-600 focus:border-yellow-500/60 focus:outline-none focus:ring-2 focus:ring-yellow-500/30"
+          <div
+            class="inline-flex w-full shrink-0 rounded-xl border border-slate-700/80 bg-slate-900/70 p-1 sm:w-auto"
+            role="tablist"
+            aria-label="Fase del torneo"
+          >
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="faseSeleccionada === 'regular'"
+              class="flex-1 rounded-lg px-4 py-2.5 font-oswald text-xs font-bold uppercase tracking-wider transition-all duration-200 sm:flex-none sm:px-6 sm:text-sm"
+              :class="
+                faseSeleccionada === 'regular'
+                  ? 'bg-yellow-400 text-slate-950 shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+              "
+              @click="seleccionarFase('regular')"
             >
-              <option value="regular">FASE REGULAR</option>
-              <option value="playoffs">PLAYOFFS</option>
-            </select>
-            <span
-              class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-yellow-500"
-              aria-hidden="true"
+              Fase regular
+            </button>
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="faseSeleccionada === 'playoffs'"
+              class="flex-1 rounded-lg px-4 py-2.5 font-oswald text-xs font-bold uppercase tracking-wider transition-all duration-200 sm:flex-none sm:px-6 sm:text-sm"
+              :class="
+                faseSeleccionada === 'playoffs'
+                  ? 'bg-yellow-400 text-slate-950 shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+              "
+              @click="seleccionarFase('playoffs')"
             >
-              ▾
-            </span>
+              Playoffs
+            </button>
           </div>
         </div>
       </header>
 
-      <!-- Fase regular -->
-      <template v-if="faseSeleccionada === 'regular'">
-        <div
-          class="overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/40 shadow-lg shadow-black/20 backdrop-blur-sm"
-        >
-          <p class="px-4 pt-3 text-center text-[11px] text-zinc-500 sm:hidden">
-            Deslizá horizontalmente para ver todas las columnas
-          </p>
-          <div class="overflow-x-auto overscroll-x-contain">
-            <table class="w-full min-w-0 text-sm sm:min-w-[640px]">
-              <thead>
-                <tr
-                  class="border-b border-zinc-800 text-left text-xs font-semibold uppercase tracking-wider text-sky-300/70"
-                >
-                  <th class="w-10 px-2 py-3 sm:w-12 sm:px-4">#</th>
-                  <th class="min-w-[8.5rem] px-2 py-3 sm:min-w-0 sm:px-3">Equipo</th>
-                  <th class="px-2 py-3 text-center">PJ</th>
-                  <th class="hidden px-2 py-3 text-center sm:table-cell">PG</th>
-                  <th class="hidden px-2 py-3 text-center sm:table-cell">PE</th>
-                  <th class="hidden px-2 py-3 text-center md:table-cell">PP</th>
-                  <th class="hidden px-2 py-3 text-center lg:table-cell">GF</th>
-                  <th class="hidden px-2 py-3 text-center lg:table-cell">GC</th>
-                  <th class="px-2 py-3 text-center sm:px-3">PTS</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="fila in equiposTabla"
-                  :key="fila.equipo_id"
-                  class="border-b border-zinc-800 transition-colors last:border-b-0 hover:bg-zinc-800/50"
-                >
-                  <td class="px-2 py-3 sm:px-4">
-                    <span
-                      class="inline-flex h-7 min-w-7 items-center justify-center rounded px-1 text-xs font-bold tabular-nums"
-                      :class="clasesPosicion(fila.posicion)"
-                    >
-                      {{ fila.posicion }}
-                    </span>
-                  </td>
-                  <td class="px-2 py-3 sm:px-3">
-                    <div class="flex items-center gap-2 sm:gap-3">
-                      <EscudoEquipo
-                        :escudo-url="fila.equipo.escudoUrl"
-                        :iniciales="fila.equipo.iniciales"
-                        :color-escudo="fila.equipo.colorEscudo"
-                        :nombre="fila.equipo.nombre"
-                        tamano="md"
-                        forma="circulo"
-                      />
-                      <span class="max-w-[9rem] truncate font-medium text-white sm:max-w-none">
-                        {{ fila.equipo.nombre }}
-                      </span>
-                    </div>
-                  </td>
-                  <td class="px-2 py-3 text-center tabular-nums text-zinc-300">
-                    {{ fila.pj }}
-                  </td>
-                  <td class="hidden px-2 py-3 text-center tabular-nums text-zinc-300 sm:table-cell">
-                    {{ fila.pg }}
-                  </td>
-                  <td class="hidden px-2 py-3 text-center tabular-nums text-zinc-300 sm:table-cell">
-                    {{ fila.pe }}
-                  </td>
-                  <td class="hidden px-2 py-3 text-center tabular-nums text-zinc-300 md:table-cell">
-                    {{ fila.pp }}
-                  </td>
-                  <td class="hidden px-2 py-3 text-center tabular-nums text-zinc-300 lg:table-cell">
-                    {{ fila.gf }}
-                  </td>
-                  <td class="hidden px-2 py-3 text-center tabular-nums text-zinc-300 lg:table-cell">
-                    {{ fila.gc }}
-                  </td>
-                  <td class="px-2 py-3 text-center sm:px-3">
-                    <span class="text-base font-bold tabular-nums text-lime-400">{{ fila.pts }}</span>
-                    <span
-                      v-if="fila.puntos_descontados > 0"
-                      class="mt-0.5 block text-[10px] font-semibold text-red-400/90"
-                    >
-                      −{{ fila.puntos_descontados }}
-                      {{ fila.puntos_descontados === 1 ? 'pt. descontado' : 'pts. descontados' }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <TablaRegularPanel
+        v-if="faseSeleccionada === 'regular'"
+        :filas="equiposTabla"
+        :cargando="cargando"
+        :error="error"
+      />
 
-        <footer class="mt-6 flex flex-wrap items-center gap-6 text-sm text-zinc-400">
-          <div class="flex items-center gap-2">
-            <span
-              class="h-2.5 w-2.5 shrink-0 rounded-full bg-green-500"
-              aria-hidden="true"
-            />
-            <span>Clasificación a playoffs</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span
-              class="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500"
-              aria-hidden="true"
-            />
-            <span>Zona de descenso</span>
-          </div>
-        </footer>
-      </template>
-
-      <!-- Playoffs -->
       <div
         v-else
-        class="relative overflow-hidden rounded-xl border border-zinc-700/40 bg-transparent p-3 sm:p-5"
+        class="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/40 p-3 shadow-sm backdrop-blur-sm sm:p-5"
       >
+        <p class="mb-3 text-center text-[11px] text-slate-500 sm:hidden">
+          Deslizá horizontalmente para ver el cuadro completo
+        </p>
         <div
-          class="overflow-x-auto transition-opacity duration-300"
+          class="overflow-x-auto overscroll-x-contain transition-opacity duration-300"
           :class="faseHabilitada ? 'opacity-100' : 'opacity-50'"
         >
           <div
             class="flex h-[920px] min-h-[920px] w-full min-w-[52rem] flex-row gap-12"
           >
-            <!-- Octavos -->
             <div class="flex h-full min-h-0 w-1/4 flex-col">
               <h2
                 class="mb-3 shrink-0 text-center text-xs font-bold uppercase tracking-[0.2em] text-sky-300/90"
@@ -210,7 +153,7 @@ function clasesPosicion(posicion: number): string {
                   class="bracket-ronda-celda flex min-h-0 flex-1 items-center justify-center py-1"
                 >
                   <div
-                    class="bracket-partido w-full shrink-0 border border-zinc-700/50 bg-zinc-900/70 backdrop-blur-sm"
+                    class="bracket-partido w-full shrink-0 border border-slate-700/50 bg-slate-900/70 backdrop-blur-sm"
                   >
                     <div class="bracket-slot">Equipo —</div>
                     <div class="bracket-slot">Equipo —</div>
@@ -219,7 +162,6 @@ function clasesPosicion(posicion: number): string {
               </div>
             </div>
 
-            <!-- Cuartos -->
             <div class="flex h-full min-h-0 w-1/4 flex-col">
               <h2
                 class="mb-3 shrink-0 text-center text-xs font-bold uppercase tracking-[0.2em] text-sky-300/90"
@@ -233,7 +175,7 @@ function clasesPosicion(posicion: number): string {
                   class="bracket-ronda-celda flex min-h-0 flex-1 items-center justify-center py-1"
                 >
                   <div
-                    class="bracket-partido w-full shrink-0 border border-zinc-700/50 bg-zinc-900/70 backdrop-blur-sm"
+                    class="bracket-partido w-full shrink-0 border border-slate-700/50 bg-slate-900/70 backdrop-blur-sm"
                   >
                     <div class="bracket-slot">Equipo —</div>
                     <div class="bracket-slot">Equipo —</div>
@@ -242,7 +184,6 @@ function clasesPosicion(posicion: number): string {
               </div>
             </div>
 
-            <!-- Semis -->
             <div class="flex h-full min-h-0 w-1/4 flex-col">
               <h2
                 class="mb-3 shrink-0 text-center text-xs font-bold uppercase tracking-[0.2em] text-sky-300/90"
@@ -256,7 +197,7 @@ function clasesPosicion(posicion: number): string {
                   class="bracket-ronda-celda flex min-h-0 flex-1 items-center justify-center py-1"
                 >
                   <div
-                    class="bracket-partido w-full shrink-0 border border-zinc-700/50 bg-zinc-900/70 backdrop-blur-sm"
+                    class="bracket-partido w-full shrink-0 border border-slate-700/50 bg-slate-900/70 backdrop-blur-sm"
                   >
                     <div class="bracket-slot">Equipo —</div>
                     <div class="bracket-slot">Equipo —</div>
@@ -265,7 +206,6 @@ function clasesPosicion(posicion: number): string {
               </div>
             </div>
 
-            <!-- Final -->
             <div class="flex h-full min-h-0 w-1/4 flex-col">
               <h2
                 class="mb-3 shrink-0 text-center text-xs font-bold uppercase tracking-[0.2em] text-yellow-400/90"
@@ -277,7 +217,7 @@ function clasesPosicion(posicion: number): string {
                   class="bracket-ronda-celda flex min-h-0 flex-1 items-center justify-center py-1"
                 >
                   <div
-                    class="bracket-partido bracket-partido--final w-full max-w-[11rem] shrink-0 border border-zinc-700/50 bg-zinc-900/70 backdrop-blur-sm ring-1 ring-yellow-500/25"
+                    class="bracket-partido bracket-partido--final w-full max-w-[11rem] shrink-0 border border-slate-700/50 bg-slate-900/70 backdrop-blur-sm ring-1 ring-yellow-500/25"
                   >
                     <div class="bracket-slot">Equipo —</div>
                     <div class="bracket-slot">Equipo —</div>
@@ -290,7 +230,7 @@ function clasesPosicion(posicion: number): string {
 
         <div
           v-if="!faseHabilitada"
-          class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-black/60 px-6 backdrop-blur-md"
+          class="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/60 px-6 backdrop-blur-md"
         >
           <div class="max-w-md text-center">
             <svg
@@ -335,10 +275,15 @@ function clasesPosicion(posicion: number): string {
 .bracket-partido {
   position: relative;
   overflow: hidden;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   box-shadow:
     0 4px 24px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bracket-partido:hover {
+  border-color: rgb(250 204 21 / 0.25);
 }
 
 .bracket-slot {

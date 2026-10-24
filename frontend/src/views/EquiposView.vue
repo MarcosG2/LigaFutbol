@@ -4,6 +4,9 @@ import { estadioUrl } from '../assets/imagenes'
 import { colorEscudoPorIndice, inicialesDeNombre } from '../api/mappers'
 import { listarEquipos } from '../api/equiposApi'
 import { listarJugadores } from '../api/jugadoresApi'
+import EquipoCard from '../components/equipos/EquipoCard.vue'
+import EquiposSkeleton from '../components/equipos/EquiposSkeleton.vue'
+import HomeEmptyState from '../components/home/HomeEmptyState.vue'
 
 type JugadorEquipo = {
   nombre: string
@@ -37,6 +40,30 @@ const equiposFiltrados = computed(() => {
   })
 })
 
+const cantidadEquipos = computed(() => equipos.value.length)
+
+const totalJugadores = computed(() =>
+  equipos.value.reduce((suma, equipo) => suma + equipo.jugadores.length, 0),
+)
+
+const sinResultadosBusqueda = computed(
+  () =>
+    !cargando.value &&
+    !errorCarga.value &&
+    equipos.value.length > 0 &&
+    equiposFiltrados.value.length === 0,
+)
+
+const jugadoresOrdenados = computed(() => {
+  const lista = equipoSeleccionado.value?.jugadores ?? []
+  return [...lista].sort((a, b) => {
+    const na = a.numeroCamiseta ?? Number.MAX_SAFE_INTEGER
+    const nb = b.numeroCamiseta ?? Number.MAX_SAFE_INTEGER
+    if (na !== nb) return na - nb
+    return a.nombre.localeCompare(b.nombre, 'es')
+  })
+})
+
 function colorTextoEscudo(colorEscudo: string): string {
   return colorEscudo === '#e2e8f0' || colorEscudo === '#f8fafc' ? '#0f172a' : 'white'
 }
@@ -47,6 +74,10 @@ function abrirDetalle(equipo: EquipoTarjeta) {
 
 function cerrarDetalle() {
   equipoSeleccionado.value = null
+}
+
+function limpiarBusqueda() {
+  busqueda.value = ''
 }
 
 function manejarTeclaEscape(evento: KeyboardEvent) {
@@ -64,7 +95,9 @@ async function cargarEquiposDesdeApi() {
     equipos.value = equiposApi.map((equipo, indice) => ({
       id: equipo.id,
       nombre: equipo.nombre,
-      subtitulo: equipo.instagram?.trim() || (equipo.estado === 'Activo' ? 'Equipo activo' : 'Equipo del torneo'),
+      subtitulo:
+        equipo.instagram?.trim() ||
+        (equipo.estado === 'Activo' ? 'Equipo activo' : 'Equipo del torneo'),
       iniciales: inicialesDeNombre(equipo.nombre) || 'EQ',
       colorEscudo: colorEscudoPorIndice(indice),
       escudoUrl: equipo.escudo_url,
@@ -101,32 +134,60 @@ onUnmounted(() => {
       aria-hidden="true"
     />
     <div
-      class="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-black/70 via-black/80 to-zinc-950/95"
+      class="pointer-events-none fixed inset-0 z-0 bg-gradient-to-b from-black/70 via-black/80 to-slate-950/95"
       aria-hidden="true"
     />
 
-    <section class="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
-      <header class="mb-8 text-center sm:text-left">
+    <section class="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+      <header class="mb-6 sm:mb-8">
+        <div class="flex flex-wrap justify-center gap-2 sm:justify-start">
+          <span
+            class="inline-flex items-center rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-[10px] font-bold tracking-wider text-yellow-300 uppercase"
+          >
+            Pro League Universitaria
+          </span>
+          <span
+            v-if="cantidadEquipos > 0"
+            class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-wider text-white/80 uppercase"
+          >
+            {{ cantidadEquipos }} equipos
+          </span>
+          <span
+            v-if="totalJugadores > 0"
+            class="inline-flex items-center rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-[10px] font-bold tracking-wider text-sky-200 uppercase"
+          >
+            {{ totalJugadores }} jugadores
+          </span>
+        </div>
+
         <h1
-          class="titulo-pincel font-oswald text-4xl font-black uppercase italic tracking-tight text-yellow-400 sm:text-5xl md:text-6xl"
+          class="titulo-pincel mt-4 text-center font-oswald text-4xl font-black uppercase italic tracking-tight text-yellow-400 sm:text-left sm:text-5xl md:text-6xl"
         >
           Equipos
         </h1>
         <p
-          class="mt-3 font-oswald text-sm font-medium uppercase italic tracking-[0.2em] text-sky-300/90 sm:text-base"
+          class="mt-3 text-center text-sm text-slate-400 sm:text-left sm:text-base"
         >
-          Conocé a todos los equipos del torneo
+          Explorá los clubes del torneo, su plantel y escudos oficiales.
         </p>
       </header>
 
-      <div class="mb-6">
+      <div
+        class="mb-6 overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/40 p-4 shadow-sm backdrop-blur-sm sm:p-5"
+      >
         <label for="buscar-equipo" class="sr-only">Buscar equipo</label>
         <div class="relative">
           <span
-            class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"
+            class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
             aria-hidden="true"
           >
-            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -138,58 +199,68 @@ onUnmounted(() => {
             id="buscar-equipo"
             v-model="busqueda"
             type="search"
-            placeholder="Buscar equipo..."
-            class="w-full rounded-xl border border-zinc-700/80 bg-zinc-900/70 py-3.5 pl-12 pr-4 font-oswald text-sm uppercase tracking-wide text-white placeholder:text-zinc-500 backdrop-blur-sm transition-colors focus:border-sky-500/50 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+            placeholder="Buscar por nombre o subtítulo..."
+            class="w-full rounded-xl border border-slate-700/80 bg-slate-950/50 py-3.5 pl-12 pr-4 font-oswald text-sm uppercase tracking-wide text-white placeholder:text-slate-500 transition-all duration-200 focus:border-yellow-400/40 focus:outline-none focus:ring-2 focus:ring-yellow-400/20"
           />
+        </div>
+        <p
+          v-if="busqueda.trim() && !cargando"
+          class="mt-3 text-center text-xs font-semibold text-slate-500 sm:text-left"
+        >
+          {{ equiposFiltrados.length }}
+          {{ equiposFiltrados.length === 1 ? 'resultado' : 'resultados' }}
+        </p>
+      </div>
+
+      <EquiposSkeleton v-if="cargando" />
+
+      <HomeEmptyState
+        v-else-if="errorCarga"
+        variante="tabla"
+        titulo="Error al cargar"
+        :descripcion="errorCarga"
+      />
+
+      <HomeEmptyState
+        v-else-if="equipos.length === 0"
+        variante="tabla"
+        titulo="Sin equipos registrados"
+        descripcion="Cuando se den de alta los clubes del torneo, aparecerán en esta página."
+      />
+
+      <div v-else-if="sinResultadosBusqueda" class="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6">
+        <HomeEmptyState
+          variante="calendario"
+          titulo="Sin coincidencias"
+          descripcion="Probá con otro nombre o limpiá el filtro de búsqueda."
+        />
+        <div class="mt-4 flex justify-center">
+          <button
+            type="button"
+            class="rounded-xl border border-yellow-400/40 px-4 py-2 text-xs font-bold tracking-wider text-yellow-400 uppercase transition-all duration-200 hover:scale-[1.02] hover:bg-yellow-400/10"
+            @click="limpiarBusqueda"
+          >
+            Limpiar búsqueda
+          </button>
         </div>
       </div>
 
-      <p v-if="cargando" class="mb-4 text-center text-sm text-zinc-400">Cargando equipos...</p>
-      <p v-else-if="errorCarga" class="mb-4 text-center text-sm text-red-400">{{ errorCarga }}</p>
-
-      <div
-        v-if="!cargando && equiposFiltrados.length === 0"
-        class="rounded-xl border border-zinc-800 bg-zinc-900/50 py-16 text-center text-zinc-400"
-      >
-        No hay equipos que coincidan con tu búsqueda.
-      </div>
-
       <ul
-        v-else-if="equiposFiltrados.length > 0"
+        v-else
         class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         role="list"
       >
         <li v-for="equipo in equiposFiltrados" :key="equipo.id">
-          <button
-            type="button"
-            class="tarjeta-equipo group flex w-full flex-col items-center rounded-2xl border border-sky-500/25 bg-zinc-900/55 px-4 py-8 text-center shadow-lg shadow-black/25 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-sky-400/45 hover:bg-zinc-900/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500/60"
-            @click="abrirDetalle(equipo)"
-          >
-            <div
-              v-if="equipo.escudoUrl"
-              class="mb-4 h-24 w-24 overflow-hidden rounded-full ring-2 ring-white/10"
-            >
-              <img
-                :src="equipo.escudoUrl"
-                :alt="`Escudo de ${equipo.nombre}`"
-                class="h-full w-full object-cover"
-              />
-            </div>
-            <div
-              v-else
-              class="mb-4 flex h-24 w-24 items-center justify-center rounded-full text-2xl font-black shadow-inner ring-2 ring-white/10 transition-transform group-hover:scale-105"
-              :style="{
-                backgroundColor: equipo.colorEscudo,
-                color: colorTextoEscudo(equipo.colorEscudo),
-              }"
-            >
-              {{ equipo.iniciales }}
-            </div>
-            <h2 class="font-oswald text-lg font-bold uppercase tracking-wide text-white">
-              {{ equipo.nombre }}
-            </h2>
-            <p class="mt-1 text-sm text-sky-300/80">{{ equipo.subtitulo }}</p>
-          </button>
+          <EquipoCard
+            :nombre="equipo.nombre"
+            :subtitulo="equipo.subtitulo"
+            :iniciales="equipo.iniciales"
+            :color-escudo="equipo.colorEscudo"
+            :escudo-url="equipo.escudoUrl"
+            :cantidad-jugadores="equipo.jugadores.length"
+            :color-texto-escudo="colorTextoEscudo(equipo.colorEscudo)"
+            @abrir="abrirDetalle(equipo)"
+          />
         </li>
       </ul>
     </section>
@@ -211,11 +282,11 @@ onUnmounted(() => {
           />
 
           <div
-            class="relative z-10 flex max-h-[min(90vh,720px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-sky-500/30 bg-zinc-950/95 shadow-2xl shadow-black/50"
+            class="relative z-10 flex max-h-[min(90vh,720px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-950/95 shadow-2xl shadow-black/50"
           >
             <button
               type="button"
-              class="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white"
+              class="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-300 transition-all duration-200 hover:scale-105 hover:border-slate-500 hover:text-white"
               aria-label="Cerrar"
               @click="cerrarDetalle"
             >
@@ -224,7 +295,7 @@ onUnmounted(() => {
 
             <div class="flex min-h-0 flex-1 flex-col md:flex-row">
               <aside
-                class="flex shrink-0 flex-col items-center justify-center border-b border-zinc-800 bg-zinc-900/50 px-6 py-10 md:w-[38%] md:border-b-0 md:border-r"
+                class="flex shrink-0 flex-col items-center justify-center border-b border-slate-800/80 bg-slate-900/50 px-6 py-10 md:w-[38%] md:border-b-0 md:border-r"
               >
                 <div
                   v-if="equipoSeleccionado.escudoUrl"
@@ -255,33 +326,48 @@ onUnmounted(() => {
                 <p class="mt-2 text-center text-sm text-sky-300/90">
                   {{ equipoSeleccionado.subtitulo }}
                 </p>
+                <p
+                  class="mt-4 rounded-full border border-slate-700/80 px-3 py-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase"
+                >
+                  {{ jugadoresOrdenados.length }}
+                  {{ jugadoresOrdenados.length === 1 ? 'jugador' : 'jugadores' }}
+                </p>
               </aside>
 
               <div class="flex min-h-0 flex-1 flex-col px-5 py-6 sm:px-8 sm:py-8">
-                <h3 class="mb-4 font-oswald text-sm font-semibold uppercase tracking-[0.2em] text-sky-300">
+                <h3
+                  class="mb-4 font-oswald text-sm font-semibold uppercase tracking-[0.2em] text-sky-300"
+                >
                   Plantel
                 </h3>
                 <ul
-                  v-if="equipoSeleccionado.jugadores.length > 0"
+                  v-if="jugadoresOrdenados.length > 0"
                   class="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1"
                   role="list"
                 >
                   <li
-                    v-for="(jugador, indice) in equipoSeleccionado.jugadores"
+                    v-for="(jugador, indice) in jugadoresOrdenados"
                     :key="indice"
-                    class="flex items-center gap-4 rounded-lg border border-zinc-800/80 bg-zinc-900/60 px-4 py-3"
+                    class="flex items-center gap-4 rounded-xl border border-slate-800/80 bg-slate-900/60 px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-slate-900/80"
                   >
                     <span
-                      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-500/15 font-oswald text-sm font-bold text-yellow-400"
+                      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-yellow-400/15 font-oswald text-sm font-bold text-yellow-400"
                     >
                       {{ jugador.numeroCamiseta ?? '—' }}
                     </span>
-                    <span class="font-oswald text-sm font-medium uppercase tracking-wide text-white">
+                    <span
+                      class="font-oswald text-sm font-medium uppercase tracking-wide text-white"
+                    >
                       {{ jugador.nombre }}
                     </span>
                   </li>
                 </ul>
-                <p v-else class="text-sm text-zinc-500">Este equipo aún no tiene jugadores cargados.</p>
+                <HomeEmptyState
+                  v-else
+                  variante="tabla"
+                  titulo="Plantel vacío"
+                  descripcion="Este equipo aún no tiene jugadores cargados."
+                />
               </div>
             </div>
           </div>
@@ -301,10 +387,6 @@ onUnmounted(() => {
 .titulo-pincel {
   text-shadow: 2px 2px rgba(0, 0, 0, 0.5), 0 0 40px rgba(250, 204, 21, 0.35);
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.4));
-}
-
-.tarjeta-equipo {
-  min-height: 220px;
 }
 
 .modal-fade-enter-active,

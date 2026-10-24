@@ -39,6 +39,8 @@ export function useDatosInicio() {
   const proximosPartidos = ref<PartidoProximoUi[]>([])
   const numeroProximaFecha = ref<number | null>(null)
   const resultadosRecientes = ref<ResultadoRecienteUi[]>([])
+  const totalEquipos = ref(0)
+  const numeroUltimaFechaJugada = ref<number | null>(null)
   const cargando = ref(false)
 
   const { filas, cargarTabla } = useTablaPosiciones()
@@ -47,6 +49,7 @@ export function useDatosInicio() {
     cargando.value = true
     try {
       const [equipos, partidos] = await Promise.all([listarEquipos(), listarPartidos()])
+      totalEquipos.value = equipos.length
       const mapa = mapaEquiposPorId(equipos)
 
       const pendientes = partidos
@@ -109,6 +112,12 @@ export function useDatosInicio() {
         }
       })
 
+      const fechasJugadas = jugados
+        .map((p) => p.numero_fecha)
+        .filter((n): n is number => n != null)
+      numeroUltimaFechaJugada.value =
+        fechasJugadas.length > 0 ? Math.max(...fechasJugadas) : null
+
       resultadosRecientes.value = jugados.slice(0, 5).map((partido) => {
         const { local, visitante } = partidoConNombres(partido, mapa)
         return {
@@ -132,6 +141,8 @@ export function useDatosInicio() {
     numeroProximaFecha,
     resultadosRecientes,
     tablaResumen: filas,
+    totalEquipos,
+    numeroUltimaFechaJugada,
     cargando,
     cargarDatosInicio,
   }

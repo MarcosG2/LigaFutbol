@@ -19,7 +19,7 @@ function enlaceActivo(rutaEnlace: string) {
 }
 
 const claseEnlaceBase =
-  'relative whitespace-nowrap px-1 pb-1 text-[13px] font-bold tracking-[0.18em] uppercase transition-colors duration-200'
+  'relative whitespace-nowrap px-0.5 pb-1 text-[11px] font-bold tracking-[0.14em] uppercase transition-colors duration-200 sm:text-[12px] sm:tracking-[0.16em] lg:text-[13px] lg:tracking-[0.18em]'
 
 function clasesEnlace(rutaEnlace: string) {
   const activo = enlaceActivo(rutaEnlace)
@@ -40,45 +40,31 @@ function clasesEnlace(rutaEnlace: string) {
     />
 
     <nav
-      class="relative mx-auto flex h-[4.25rem] max-w-[90rem] items-center overflow-visible px-4 sm:px-6 lg:h-[4.5rem] lg:px-10"
+      class="relative mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-3 px-4 sm:h-[4.25rem] sm:px-6 lg:h-[4.5rem] lg:gap-6 lg:px-10"
       aria-label="Navegación principal"
     >
       <RouterLink
         to="/"
-        class="relative z-30 shrink-0 transition-opacity hover:opacity-95"
+        class="relative z-10 shrink-0 transition-opacity hover:opacity-95"
       >
-        <span
-          class="relative -mb-6 block h-[4.5rem] w-[4.75rem] overflow-hidden sm:-mb-7 sm:h-[5.25rem] sm:w-[5.5rem]"
-        >
-          <img
-            :src="logoUrl"
-            alt="PLU - Pro League Universitaria"
-            class="pointer-events-none h-full w-auto max-w-none select-none"
-            width="88"
-            height="88"
-          />
-        </span>
+        <img
+          :src="logoUrl"
+          alt="PLU - Pro League Universitaria"
+          class="pointer-events-none h-12 w-auto select-none sm:h-14 lg:h-[3.75rem]"
+          width="88"
+          height="88"
+        />
       </RouterLink>
 
       <ul
-        class="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-7 lg:flex lg:gap-10 xl:gap-12"
+        class="flex min-w-0 items-center justify-end gap-3 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-5 lg:gap-10 xl:gap-12 [&::-webkit-scrollbar]:hidden"
       >
-        <li v-for="enlace in enlacesMenu" :key="enlace.ruta">
+        <li v-for="enlace in enlacesMenu" :key="enlace.ruta" class="shrink-0">
           <RouterLink :to="enlace.ruta" :class="clasesEnlace(enlace.ruta)">
             {{ enlace.etiqueta }}
           </RouterLink>
         </li>
       </ul>
     </nav>
-
-    <ul
-      class="flex gap-4 overflow-x-auto overscroll-x-contain border-t border-white/[0.06] px-4 py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
-    >
-      <li v-for="enlace in enlacesMenu" :key="`mobile-${enlace.ruta}`">
-        <RouterLink :to="enlace.ruta" :class="clasesEnlace(enlace.ruta)">
-          {{ enlace.etiqueta }}
-        </RouterLink>
-      </li>
-    </ul>
   </header>
 </template>

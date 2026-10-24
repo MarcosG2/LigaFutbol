@@ -12,6 +12,8 @@ import {
 import { listarJugadores } from '../../api/jugadoresApi'
 import type { JugadorApi } from '../../api/tipos'
 import { ErrorApi } from '../../api/cliente'
+import EditorEscudoModal from '../../components/admin/EditorEscudoModal.vue'
+import { encuadrarImagenEscudo } from '../../utils/encuadrarImagenEscudo'
 import { optimizarImagenEscudo } from '../../utils/optimizarImagenEscudo'
 
 const MIN_JUGADORES = 11
@@ -43,6 +45,20 @@ const inputArchivoExcel = ref<HTMLInputElement | null>(null)
 const inputArchivoEscudo = ref<HTMLInputElement | null>(null)
 const escudoArchivoPendiente = ref<File | null>(null)
 const escudoMarcadoParaEliminar = ref(false)
+const escudoEncuadreX = ref(50)
+const escudoEncuadreY = ref(50)
+const editorEscudoAbierto = ref(false)
+
+const estiloVistaPreviaEscudo = computed(() => ({
+  objectPosition: `${escudoEncuadreX.value}% ${escudoEncuadreY.value}%`,
+}))
+
+const escudoEditorDisponible = computed(() => {
+  if (!equipoActual.value.escudoUrl) return false
+  if (escudoArchivoPendiente.value?.type === 'image/svg+xml') return false
+  if (equipoActual.value.escudoUrl.startsWith('data:image/svg')) return false
+  return true
+})
 
 const nombreJugadorNuevo = ref('')
 const dorsalJugadorNuevo = ref<number | ''>('')
@@ -99,10 +115,32 @@ function abrirSelectorEscudo() {
   inputArchivoEscudo.value?.click()
 }
 
+function reiniciarEncuadreEscudo() {
+  escudoEncuadreX.value = 50
+  escudoEncuadreY.value = 50
+}
+
+function abrirEditorEscudo() {
+  if (!escudoEditorDisponible.value) return
+  editorEscudoAbierto.value = true
+}
+
+function cerrarEditorEscudo() {
+  editorEscudoAbierto.value = false
+}
+
+function confirmarEditorEscudo(x: number, y: number) {
+  escudoEncuadreX.value = x
+  escudoEncuadreY.value = y
+  editorEscudoAbierto.value = false
+}
+
 function quitarEscudo() {
   equipoActual.value.escudoUrl = null
   escudoArchivoPendiente.value = null
   escudoMarcadoParaEliminar.value = true
+  reiniciarEncuadreEscudo()
+  editorEscudoAbierto.value = false
   if (inputArchivoEscudo.value) {
     inputArchivoEscudo.value.value = ''
   }
@@ -130,11 +168,15 @@ async function manejarEscudoSeleccionado(event: Event) {
 
   escudoArchivoPendiente.value = archivo
   escudoMarcadoParaEliminar.value = false
+  reiniciarEncuadreEscudo()
 
   const lector = new FileReader()
   lector.onload = () => {
     if (typeof lector.result === 'string') {
       equipoActual.value.escudoUrl = lector.result
+      if (escudoEditorDisponible.value) {
+        editorEscudoAbierto.value = true
+      }
     }
   }
   lector.onerror = () => {
@@ -181,6 +223,7 @@ function cerrarModal() {
   escudoArchivoPendiente.value = null
   escudoMarcadoParaEliminar.value = false
   limpiarFormularioJugador()
+  editorEscudoAbierto.value = false
   if (inputArchivoEscudo.value) {
     inputArchivoEscudo.value.value = ''
   }
@@ -470,8 +513,17 @@ async function guardarEquipo() {
     }
 
     if (escudoArchivoPendiente.value) {
-      const conEscudo = await subirEscudoEquipo(equipoId, escudoArchivoPendiente.value)
+      let archivoSubir = escudoArchivoPendiente.value
+      if (archivoSubir.type !== 'image/svg+xml') {
+        archivoSubir = await encuadrarImagenEscudo(
+          archivoSubir,
+          escudoEncuadreX.value,
+          escudoEncuadreY.value,
+        )
+      }
+      const conEscudo = await subirEscudoEquipo(equipoId, archivoSubir)
       escudoUrl = conEscudo.escudo_url
+      reiniciarEncuadreEscudo()
     }
 
     aplicarEquipoEnLista({
@@ -520,7 +572,7 @@ onMounted(() => {
         Gestión de <span class="text-yellow-400">equipos</span>
       </h2>
       <p class="mt-2 text-sm text-zinc-400 sm:text-base">
-        Clubes y plantillas del torneo (sincronizado con la API).
+        Clubes y plantillas del torneo.
       </p>
     </header>
 
@@ -725,16 +777,17 @@ onMounted(() => {
                 <div>
                   <p class="mb-1.5 block text-sm font-medium text-zinc-300">Escudo del equipo</p>
                   <div
-                    class="flex flex-col gap-4 rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-4 sm:flex-row sm:items-center"
+                    class="flex flex-col gap-4 rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-4 sm:flex-row sm:items-start"
                   >
                     <div
-                      class="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-zinc-700 bg-zinc-900"
+                      class="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-zinc-700 bg-zinc-900"
                     >
                       <img
                         v-if="equipoActual.escudoUrl"
                         :src="equipoActual.escudoUrl"
                         alt="Vista previa del escudo"
                         class="h-full w-full object-cover"
+                        :style="estiloVistaPreviaEscudo"
                       />
                       <span
                         v-else
@@ -746,7 +799,8 @@ onMounted(() => {
 
                     <div class="min-w-0 flex-1 space-y-2">
                       <p class="text-xs text-zinc-500">
-                        JPG, PNG, WEBP o SVG · máx. {{ TAMANO_MAX_ESCUDO_MB }} MB · se optimiza al subir (hasta 512px)
+                        JPG, PNG, WEBP o SVG · máx. {{ TAMANO_MAX_ESCUDO_MB }} MB · se optimiza al
+                        subir (hasta 512px). Podés ajustar el encuadre con Editar escudo.
                       </p>
                       <input
                         ref="inputArchivoEscudo"
@@ -777,6 +831,29 @@ onMounted(() => {
                             />
                           </svg>
                           Subir escudo
+                        </button>
+                        <button
+                          v-if="escudoEditorDisponible"
+                          type="button"
+                          class="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:border-sky-500/40 hover:bg-sky-500/10"
+                          @click="abrirEditorEscudo"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.75"
+                            class="h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M16.862 4.487 19.5 7.125M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4m6-1 2 2-7 7-2 2-7 7-2.5 2.5"
+                            />
+                          </svg>
+                          Editar escudo
                         </button>
                         <button
                           v-if="equipoActual.escudoUrl"
@@ -1022,5 +1099,15 @@ onMounted(() => {
         </form>
       </div>
     </Teleport>
+
+    <EditorEscudoModal
+      v-if="equipoActual.escudoUrl"
+      :abierto="editorEscudoAbierto"
+      :imagen-url="equipoActual.escudoUrl"
+      :encuadre-x="escudoEncuadreX"
+      :encuadre-y="escudoEncuadreY"
+      @cerrar="cerrarEditorEscudo"
+      @confirmar="confirmarEditorEscudo"
+    />
   </div>
 </template>

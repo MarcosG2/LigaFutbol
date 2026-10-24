@@ -13,6 +13,8 @@ import { estadioUrl } from '../assets/imagenes'
 import FixturePartidoTarjeta, {
   type PartidoFixtureTarjeta,
 } from '../components/FixturePartidoTarjeta.vue'
+import FixtureSkeleton from '../components/fixture/FixtureSkeleton.vue'
+import HomeEmptyState from '../components/home/HomeEmptyState.vue'
 
 type FechaFixture = {
   numero: number
@@ -49,6 +51,16 @@ const hayMasFechasPorCargar = computed(
 )
 
 const totalFechas = computed(() => fixturePorFecha.value.length)
+
+const totalPartidos = computed(() =>
+  fixturePorFecha.value.reduce((suma, bloque) => suma + bloque.partidos.length, 0),
+)
+
+const partidosEnFechaActual = computed(() => partidosActivos.value.length)
+
+const fixtureVacio = computed(
+  () => !cargando.value && fixturePorFecha.value.length === 0,
+)
 
 function seleccionarFecha(numero: number) {
   selectedFecha.value = numero
@@ -125,6 +137,7 @@ async function cargarFixture() {
         },
         golesLocal: partido.goles_local,
         golesVisitante: partido.goles_visitante,
+        estado: partido.estado,
       }
       const lista = porFecha.get(numero) ?? []
       lista.push(item)
@@ -181,26 +194,56 @@ onUnmounted(() => {
       />
 
       <div class="relative mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+        <div class="flex flex-wrap gap-2">
+          <span
+            class="inline-flex items-center rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1 text-[10px] font-bold tracking-wider text-yellow-300 uppercase"
+          >
+            Pro League Universitaria
+          </span>
+          <span
+            v-if="totalFechas > 0"
+            class="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-wider text-white/80 uppercase"
+          >
+            {{ totalFechas }} fechas
+          </span>
+          <span
+            v-if="totalPartidos > 0"
+            class="inline-flex items-center rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-[10px] font-bold tracking-wider text-sky-200 uppercase"
+          >
+            {{ totalPartidos }} partidos
+          </span>
+        </div>
+
         <h1
-          class="titulo-pincel font-oswald text-5xl font-black uppercase italic tracking-tight text-yellow-400 sm:text-6xl md:text-7xl"
+          class="titulo-pincel mt-4 font-oswald text-5xl font-black uppercase italic tracking-tight text-yellow-400 sm:text-6xl md:text-7xl"
         >
           Fixture
         </h1>
         <p
-          class="mt-1 font-oswald text-base font-medium uppercase italic tracking-[0.18em] text-sky-300/90 sm:text-lg sm:tracking-[0.28em] md:text-xl md:tracking-[0.35em]"
+          class="mt-2 max-w-lg font-oswald text-base font-medium uppercase italic tracking-[0.18em] text-sky-300/90 sm:text-lg sm:tracking-[0.22em]"
         >
-          Partidos del torneo
+          Calendario completo del torneo
         </p>
       </div>
     </section>
 
-    <section class="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-      <p v-if="cargando" class="text-center text-sm text-zinc-400">Cargando fixture...</p>
+    <section class="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
+      <FixtureSkeleton v-if="cargando" />
 
-      <template v-else>
+      <HomeEmptyState
+        v-else-if="fixtureVacio"
+        variante="calendario"
+        titulo="Fixture sin partidos"
+        descripcion="Cuando se programen fechas y cruces, los verás acá."
+      />
+
+      <div
+        v-else
+        class="overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/40 p-4 shadow-sm backdrop-blur-sm sm:p-6"
+      >
         <div
           v-if="!modoCompleto"
-          class="-mx-1 flex gap-2 overflow-x-auto pb-2 scrollbar-thin sm:mx-0 sm:flex-wrap sm:justify-center sm:gap-3"
+          class="-mx-1 flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [mask-image:linear-gradient(to_right,transparent,black_8px,black_calc(100%-8px),transparent)] sm:mx-0 sm:flex-wrap sm:justify-center sm:gap-2.5 sm:[mask-image:none]"
           role="tablist"
           aria-label="Seleccionar fecha del torneo"
         >
@@ -210,11 +253,11 @@ onUnmounted(() => {
             type="button"
             role="tab"
             :aria-selected="selectedFecha === numero"
-            class="shrink-0 rounded-md border px-5 py-2.5 font-oswald text-sm font-bold uppercase tracking-wider transition-colors sm:px-8 sm:text-base"
+            class="shrink-0 rounded-xl border px-4 py-2.5 font-oswald text-xs font-bold uppercase tracking-wider transition-all duration-200 sm:px-6 sm:text-sm"
             :class="
               selectedFecha === numero
-                ? 'border-yellow-400 bg-yellow-400 text-black shadow-[0_0_24px_rgba(250,204,21,0.35)]'
-                : 'border-zinc-700 bg-zinc-900/60 text-white hover:border-zinc-500 hover:bg-zinc-800/80'
+                ? 'scale-[1.02] border-yellow-400 bg-yellow-400 text-slate-950 shadow-sm shadow-yellow-400/30'
+                : 'border-slate-700/80 bg-slate-950/50 text-white hover:scale-[1.02] hover:border-slate-500 hover:bg-slate-800/80'
             "
             @click="seleccionarFecha(numero)"
           >
@@ -224,44 +267,53 @@ onUnmounted(() => {
 
         <p
           v-if="modoCompleto"
-          class="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-center text-sm text-zinc-300"
+          class="rounded-xl border border-slate-800/80 bg-slate-950/40 px-4 py-3 text-center text-sm text-slate-300"
         >
           Mostrando
           <strong class="text-yellow-400">{{ fechasVisibles.length }}</strong>
           de
           <strong class="text-white">{{ totalFechas }}</strong>
-          fechas. Bajá para cargar más jornadas.
+          fechas. Deslizá hacia abajo para cargar más jornadas.
         </p>
 
         <p
-          v-if="!modoCompleto && partidosActivos.length === 0"
-          class="mt-8 text-center text-sm text-zinc-500"
+          v-if="!modoCompleto && selectedFecha > 0"
+          class="mt-4 text-center text-xs font-semibold tracking-wide text-slate-500 uppercase"
         >
-          No hay partidos cargados para esta fecha.
+          {{ partidosEnFechaActual }}
+          {{ partidosEnFechaActual === 1 ? 'partido' : 'partidos' }} en fecha
+          {{ selectedFecha }}
         </p>
 
-        <ul v-else-if="!modoCompleto" class="mt-8 space-y-3 sm:space-y-4" role="list">
+        <HomeEmptyState
+          v-if="!modoCompleto && partidosActivos.length === 0"
+          variante="calendario"
+          titulo="Sin partidos en esta fecha"
+          descripcion="No hay partidos cargados para la jornada seleccionada."
+        />
+
+        <ul v-else-if="!modoCompleto" class="mt-5 space-y-3 sm:mt-6 sm:space-y-4" role="list">
           <li v-for="partido in partidosActivos" :key="partido.id">
             <FixturePartidoTarjeta :partido="partido" />
           </li>
         </ul>
 
-        <div
-          v-else
-          id="fixture-vista-completa"
-          class="mt-8 space-y-10"
-        >
+        <div v-else id="fixture-vista-completa" class="mt-6 space-y-10 sm:mt-8">
           <section
             v-for="bloque in fechasVisibles"
             :key="bloque.numero"
-            class="scroll-mt-24"
+            class="scroll-mt-24 rounded-2xl border border-slate-800/60 bg-slate-950/30 p-4 sm:p-5"
             :aria-labelledby="`titulo-fecha-${bloque.numero}`"
           >
             <h2
               :id="`titulo-fecha-${bloque.numero}`"
-              class="mb-4 border-b border-yellow-500/30 pb-2 font-oswald text-xl font-bold uppercase tracking-wide text-yellow-400 sm:text-2xl"
+              class="mb-4 flex items-center justify-between gap-2 border-b border-yellow-500/25 pb-3 font-oswald text-lg font-bold uppercase tracking-wide text-yellow-400 sm:text-xl"
             >
-              Fecha {{ bloque.numero }}
+              <span>Fecha {{ bloque.numero }}</span>
+              <span class="text-[10px] font-semibold text-slate-500">
+                {{ bloque.partidos.length }}
+                {{ bloque.partidos.length === 1 ? 'partido' : 'partidos' }}
+              </span>
             </h2>
             <ul class="space-y-3 sm:space-y-4" role="list">
               <li v-for="partido in bloque.partidos" :key="partido.id">
@@ -272,24 +324,25 @@ onUnmounted(() => {
 
           <div ref="sentinelRef" class="h-2 w-full" aria-hidden="true" />
 
-          <p
+          <div
             v-if="hayMasFechasPorCargar"
-            class="py-4 text-center text-sm text-zinc-500"
+            class="flex animate-pulse justify-center py-4"
+            role="status"
           >
-            Cargando más fechas…
-          </p>
+            <span class="h-2 w-32 rounded-full bg-slate-700/70" />
+          </div>
           <p
             v-else-if="totalFechas > 0"
-            class="py-4 text-center text-xs font-medium tracking-wide text-zinc-600 uppercase"
+            class="py-4 text-center text-xs font-medium tracking-wide text-slate-600 uppercase"
           >
             Fin del fixture
           </p>
         </div>
 
-        <div class="mt-10 flex justify-center pb-6">
+        <div class="mt-8 flex justify-center border-t border-slate-800/80 pt-6 sm:mt-10">
           <button
             type="button"
-            class="inline-flex w-full max-w-2xl items-center justify-center gap-2 rounded-md border-2 border-yellow-500 bg-transparent px-4 py-3.5 font-oswald text-xs font-bold uppercase tracking-[0.12em] text-yellow-500 transition-colors hover:bg-yellow-500/10 hover:text-yellow-400 sm:gap-3 sm:px-6 sm:py-4 sm:text-sm sm:tracking-[0.2em] md:text-base"
+            class="inline-flex w-full max-w-2xl items-center justify-center gap-2 rounded-xl border-2 border-yellow-500/80 bg-transparent px-4 py-3.5 font-oswald text-xs font-bold uppercase tracking-[0.12em] text-yellow-400 transition-all duration-200 hover:scale-[1.01] hover:bg-yellow-500/10 hover:text-yellow-300 sm:gap-3 sm:px-6 sm:py-4 sm:text-sm sm:tracking-[0.16em]"
             @click="modoCompleto ? volverVistaPorFecha() : activarVistaCompleta()"
           >
             <svg
@@ -306,7 +359,7 @@ onUnmounted(() => {
             {{ modoCompleto ? 'Ver por fecha' : 'Ver todo el fixture' }}
           </button>
         </div>
-      </template>
+      </div>
     </section>
   </div>
 </template>
