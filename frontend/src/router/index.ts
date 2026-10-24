@@ -24,6 +24,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/LoginView.vue'),
   },
   {
+    path: '/administradores/login',
+    name: 'login-administradores',
+    component: () => import('../views/LoginView.vue'),
+  },
+  {
     path: '/admin',
     component: () => import('../layouts/AdminLayout.vue'),
     meta: { requiresAuth: true },
@@ -68,7 +73,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (to.path === '/login') {
+  if (to.path === '/login' || to.path === '/administradores/login') {
     return haySesionActiva() ? '/admin' : true
   }
 
