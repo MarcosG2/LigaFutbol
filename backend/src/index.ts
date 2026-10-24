@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { opcionesCors } from "./config/cors.js";
 import { env } from "./config/env.js";
+import { ejecutarMigracionesPendientes } from "./db/migraciones.js";
 import { routerApi } from "./routes/index.js";
 
 const app = express();
@@ -17,6 +18,18 @@ app.get("/health", (_req, res) => {
 
 app.use("/api", routerApi);
 
-app.listen(puerto, () => {
-  console.log(`Servidor escuchando en http://localhost:${puerto} (${env.NODE_ENV})`);
+async function iniciarServidor(): Promise<void> {
+  if (env.RUN_MIGRATIONS_ON_START) {
+    console.log("[migrate] Ejecutando migraciones pendientes antes de arrancar…");
+    await ejecutarMigracionesPendientes();
+  }
+
+  app.listen(puerto, () => {
+    console.log(`Servidor escuchando en http://localhost:${puerto} (${env.NODE_ENV})`);
+  });
+}
+
+iniciarServidor().catch((error) => {
+  console.error("No se pudo iniciar el servidor:", error);
+  process.exit(1);
 });

@@ -1,5 +1,4 @@
--- Sanciones disciplinarias: descuento de puntos por torneo/equipo
-USE liga_futbol;
+-- Sanciones disciplinarias: descuento de puntos por torneo/equipo (no borra datos existentes).
 
 CREATE TABLE IF NOT EXISTS `Sanciones` (
   `id` int NOT NULL AUTO_INCREMENT,

@@ -7,6 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "migrate": "tsx src/migrar.ts",
+    "migrate:prod": "node dist/migrar.js",
     "seed": "mysql -u root -P 3308 < scripts/seed.sql",
     "seed:demo": "mysql -u root -P 3308 liga_futbol < scripts/seed-inicial.sql"
   },

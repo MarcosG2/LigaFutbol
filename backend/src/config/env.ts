@@ -19,6 +19,10 @@ const esquemaEnv = z
     CLOUDINARY_CLOUD_NAME: z.string().optional(),
     CLOUDINARY_API_KEY: z.string().optional(),
     CLOUDINARY_API_SECRET: z.string().optional(),
+    RUN_MIGRATIONS_ON_START: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
   })
   .superRefine((datos, ctx) => {
     if (datos.NODE_ENV === "production") {
