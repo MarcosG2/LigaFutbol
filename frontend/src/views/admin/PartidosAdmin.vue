@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import AvisoDialog from '../../components/AvisoDialog.vue'
 import { listarEquipos } from '../../api/equiposApi'
 import { obtenerTorneoActivo } from '../../api/torneosApi'
@@ -38,6 +38,7 @@ onMounted(async () => {
 
 const modalAbierto = ref(false)
 const guardandoFecha = ref(false)
+const anclaUltimoPartido = ref<HTMLElement | null>(null)
 const destacadoPortadaInvalido = ref(false)
 const avisoDialog = ref({
   abierto: false,
@@ -306,9 +307,17 @@ function cerrarModal() {
   cerrarAviso()
 }
 
-function agregarPartidoEnFormulario() {
+async function agregarPartidoEnFormulario() {
   fechaEnEdicion.value.partidos.push(partidoVacio())
   asegurarDestacadoUnico()
+  await nextTick()
+  anclaUltimoPartido.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+function asignarRefUltimoPartido(el: Element | null, indice: number) {
+  if (indice === fechaEnEdicion.value.partidos.length - 1) {
+    anclaUltimoPartido.value = el as HTMLElement | null
+  }
 }
 
 function quitarPartidoEnFormulario(indice: number) {
@@ -736,8 +745,9 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
             </div>
             <button
               type="button"
-              class="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+              class="rounded-xl p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Cerrar"
+              :disabled="guardandoFecha"
               @click="cerrarModal"
             >
               <svg
@@ -753,7 +763,9 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
             </button>
           </header>
 
-          <div class="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <div
+            class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 pb-6 sm:px-6 sm:pb-8"
+          >
             <div class="max-w-xs">
               <label for="numero-fecha" class="mb-1.5 block text-sm font-medium text-zinc-300">
                 Número de fecha
@@ -782,23 +794,15 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
               >
                 Marcá un solo cruce como <strong>Destacado en portada</strong>.
               </p>
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <h4 class="text-sm font-semibold tracking-wide text-yellow-400 uppercase">
-                  Partidos de la fecha
-                </h4>
-                <button
-                  type="button"
-                  class="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-yellow-400 transition-colors hover:border-yellow-500/40 hover:bg-yellow-500/10"
-                  @click="agregarPartidoEnFormulario"
-                >
-                  + Agregar Partido
-                </button>
-              </div>
+              <h4 class="text-sm font-semibold tracking-wide text-yellow-400 uppercase">
+                Partidos de la fecha
+              </h4>
 
               <div
                 v-for="(partido, indice) in fechaEnEdicion.partidos"
                 :key="`partido-form-${indice}`"
-                class="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-4"
+                :ref="(el) => asignarRefUltimoPartido(el as Element | null, indice)"
+                class="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-4 sm:p-5"
               >
                 <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div class="flex items-center gap-3">
@@ -967,24 +971,67 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
                   </div>
                 </div>
               </div>
+
+              <button
+                type="button"
+                class="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-600/80 bg-zinc-950/30 px-4 py-3.5 text-sm font-semibold text-yellow-400 transition-colors hover:border-yellow-500/50 hover:bg-yellow-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="guardandoFecha"
+                @click="agregarPartidoEnFormulario"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="h-4 w-4 shrink-0"
+                  aria-hidden="true"
+                >
+                  <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+                </svg>
+                Agregar partido
+              </button>
             </div>
           </div>
 
           <footer
-            class="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-800/80 px-6 py-4"
+            class="sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-zinc-800/80 bg-zinc-900/85 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-zinc-900/75 sm:gap-3 sm:px-6 sm:py-4"
           >
             <button
               type="button"
-              class="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+              class="w-full rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              :disabled="guardandoFecha"
               @click="cerrarModal"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              class="rounded-lg bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-4 py-2 text-sm font-bold text-black shadow-lg shadow-yellow-500/20 transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-5 py-2.5 text-sm font-bold text-black shadow-lg shadow-yellow-500/20 transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
               :disabled="guardandoFecha"
             >
+              <svg
+                v-if="guardandoFecha"
+                class="h-4 w-4 animate-spin"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
               {{ guardandoFecha ? 'Guardando…' : 'Guardar fecha' }}
             </button>
           </footer>
