@@ -34,6 +34,8 @@ Así, cada vez que arranca el backend, aplica solo las migraciones **pendientes*
 2. `migracion-destacado-portada.sql`
 3. `migracion-sanciones.sql`
 4. `migracion-cancha-partido.sql`
+5. `migracion-estado-reprogramado.sql`
+6. `migracion-es-playoff.sql`
 
 ## Base que ya tenía cambios manuales
 
