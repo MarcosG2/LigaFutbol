@@ -8,7 +8,13 @@ import {
   partidoConNombres,
 } from '../api/mappers'
 import { listarPartidos } from '../api/partidosApi'
-import type { EquipoResumenUi } from '../api/tipos'
+import {
+  obtenerNumeroProximaFecha,
+  obtenerNumeroUltimaFechaResultados,
+  partidosProximaFecha,
+  partidosResultadosUltimaJornada,
+} from '../api/proximaFecha'
+import type { EquipoResumenUi, PartidoApi } from '../api/tipos'
 import { useTablaPosiciones } from './useTablaPosiciones'
 
 export type PartidoProximoUi = {
@@ -45,6 +51,21 @@ export function useDatosInicio() {
 
   const { filas, cargarTabla } = useTablaPosiciones()
 
+  function ordenarPartidosEnJornada(a: PartidoApi, b: PartidoApi): number {
+    const ordenPartido =
+      (a.numero_partido ?? Number.MAX_SAFE_INTEGER) -
+      (b.numero_partido ?? Number.MAX_SAFE_INTEGER)
+    if (ordenPartido !== 0) return ordenPartido
+    const tiempoA = a.fecha_hora ? new Date(a.fecha_hora).getTime() : Number.MAX_SAFE_INTEGER
+    const tiempoB = b.fecha_hora ? new Date(b.fecha_hora).getTime() : Number.MAX_SAFE_INTEGER
+    return tiempoA - tiempoB
+  }
+
+  function textoHorarioPartido(partido: PartidoApi): string {
+    if (!partido.fecha_hora) return 'FECHA A CONFIRMAR'
+    return `${formatearFechaDia(partido.fecha_hora).toUpperCase()} ${formatearHora(partido.fecha_hora)}`
+  }
+
   async function cargarDatosInicio() {
     cargando.value = true
     try {
@@ -52,22 +73,13 @@ export function useDatosInicio() {
       totalEquipos.value = equipos.length
       const mapa = mapaEquiposPorId(equipos)
 
-      const pendientes = partidos
-        .filter((p) => p.estado === 'Pendiente' && p.fecha_hora)
-        .sort(
-          (a, b) =>
-            new Date(a.fecha_hora as string).getTime() - new Date(b.fecha_hora as string).getTime(),
-        )
+      const jornadaProxima = obtenerNumeroProximaFecha(partidos)
+      const pendientesProximaJornada = partidosProximaFecha(partidos, jornadaProxima).sort(
+        ordenarPartidosEnJornada,
+      )
 
-      const jugados = partidos
-        .filter((p) => p.estado === 'Jugado')
-        .sort(
-          (a, b) =>
-            new Date(b.fecha_hora as string).getTime() - new Date(a.fecha_hora as string).getTime(),
-        )
-
-      const destacadosPendientes = pendientes.filter((p) => p.destacado_portada)
-      const partidoPortada = destacadosPendientes[0] ?? pendientes[0]
+      const destacadosPendientes = pendientesProximaJornada.filter((p) => p.destacado_portada)
+      const partidoPortada = destacadosPendientes[0] ?? pendientesProximaJornada[0]
 
       if (partidoPortada) {
         const { local, visitante, partido } = partidoConNombres(partidoPortada, mapa)
@@ -75,50 +87,40 @@ export function useDatosInicio() {
           local,
           visitante,
           fechaNumero: partido.numero_fecha ?? 0,
-          dia: formatearFechaDia(partido.fecha_hora).toUpperCase(),
-          hora: formatearHora(partido.fecha_hora),
+          dia: partido.fecha_hora
+            ? formatearFechaDia(partido.fecha_hora).toUpperCase()
+            : 'FECHA A CONFIRMAR',
+          hora: partido.fecha_hora ? formatearHora(partido.fecha_hora) : '—',
         }
       } else {
         partidoDestacado.value = null
       }
 
-      const jornadaProxima = pendientes[0]?.numero_fecha ?? null
-
       numeroProximaFecha.value = jornadaProxima
 
-      const partidosDeProximaFecha =
-        jornadaProxima == null
-          ? []
-          : pendientes.filter((p) => p.numero_fecha === jornadaProxima)
-
-      partidosDeProximaFecha.sort((a, b) => {
-        const ordenPartido =
-          (a.numero_partido ?? Number.MAX_SAFE_INTEGER) -
-          (b.numero_partido ?? Number.MAX_SAFE_INTEGER)
-        if (ordenPartido !== 0) return ordenPartido
-        return (
-          new Date(a.fecha_hora as string).getTime() - new Date(b.fecha_hora as string).getTime()
-        )
-      })
-
-      proximosPartidos.value = partidosDeProximaFecha.map((partido) => {
+      proximosPartidos.value = pendientesProximaJornada.map((partido) => {
         const { local, visitante } = partidoConNombres(partido, mapa)
         return {
           local,
           visitante,
-          hora: `${formatearFechaDia(partido.fecha_hora).toUpperCase()} ${formatearHora(partido.fecha_hora)}`,
+          hora: textoHorarioPartido(partido),
           cancha: canchaDePartido(partido.cancha).toUpperCase(),
           fechaNumero: partido.numero_fecha ?? 0,
         }
       })
 
-      const fechasJugadas = jugados
-        .map((p) => p.numero_fecha)
-        .filter((n): n is number => n != null)
-      numeroUltimaFechaJugada.value =
-        fechasJugadas.length > 0 ? Math.max(...fechasJugadas) : null
+      const jornadaUltimosResultados = obtenerNumeroUltimaFechaResultados(
+        partidos,
+        jornadaProxima,
+      )
+      numeroUltimaFechaJugada.value = jornadaUltimosResultados
 
-      resultadosRecientes.value = jugados.slice(0, 5).map((partido) => {
+      const jugadosUltimaJornada = partidosResultadosUltimaJornada(
+        partidos,
+        jornadaUltimosResultados,
+      )
+
+      resultadosRecientes.value = jugadosUltimaJornada.map((partido) => {
         const { local, visitante } = partidoConNombres(partido, mapa)
         return {
           local,

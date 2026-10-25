@@ -15,7 +15,7 @@ import {
 import type { PartidoApi } from '../api/tipos'
 import { obtenerTorneoActivo } from '../api/torneosApi'
 
-export type EstadoPartido = 'PROGRAMADO' | 'FINALIZADO' | 'EN_JUEGO'
+export type EstadoPartido = 'PROGRAMADO' | 'FINALIZADO' | 'SUSPENDIDO' | 'REPROGRAMADO'
 
 export type PartidoAdmin = {
   id: number
@@ -30,11 +30,13 @@ export type PartidoAdmin = {
   goles_local: number | null
   goles_visitante: number | null
   destacado_portada: boolean
+  es_playoff: boolean
 }
 
 export type FechaTorneoAdmin = {
   id_fecha: number
   numero: number
+  es_playoff: boolean
   partidos: PartidoAdmin[]
 }
 
@@ -100,6 +102,7 @@ function partidoApiAAdmin(partido: PartidoApi): PartidoAdmin {
     goles_local: partido.goles_local,
     goles_visitante: partido.goles_visitante,
     destacado_portada: Boolean(partido.destacado_portada),
+    es_playoff: Boolean(partido.es_playoff),
   }
 }
 
@@ -122,11 +125,15 @@ function agruparPartidos(partidos: PartidoApi[]): FechaTorneoAdmin[] {
 
   return [...porNumero.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([numero, listaPartidos]) => ({
-      id_fecha: numero,
-      numero,
-      partidos: listaPartidos.sort(compararPartidosEnFecha),
-    }))
+    .map(([numero, listaPartidos]) => {
+      const ordenados = listaPartidos.sort(compararPartidosEnFecha)
+      return {
+        id_fecha: numero,
+        numero,
+        es_playoff: ordenados.some((p) => p.es_playoff),
+        partidos: ordenados,
+      }
+    })
 }
 
 export async function cargarPartidosAdmin(): Promise<void> {
@@ -186,18 +193,22 @@ export async function persistirFechaAdmin(
     const localId = nombreAIdEquipo(partido.local) ?? partido.equipo_local_id
     const visitanteId = nombreAIdEquipo(partido.visitante) ?? partido.equipo_visitante_id
 
+    const reprogramado = partido.estado === 'REPROGRAMADO'
+    const suspendido = partido.estado === 'SUSPENDIDO'
+    const sinPuntosEnTabla = reprogramado || suspendido
     const cuerpo = {
       torneo_id: torneo.id,
       numero_fecha: fecha.numero,
       numero_partido: partido.numero_partido,
       equipo_local_id: localId,
       equipo_visitante_id: visitanteId,
-      goles_local: partido.goles_local,
-      goles_visitante: partido.goles_visitante,
-      fecha_hora: fechaHoraUiAIso(partido.fecha_hora),
+      goles_local: sinPuntosEnTabla ? null : partido.goles_local,
+      goles_visitante: sinPuntosEnTabla ? null : partido.goles_visitante,
+      fecha_hora: reprogramado ? null : fechaHoraUiAIso(partido.fecha_hora),
       cancha: canchaDePartido(partido.cancha),
       estado: estadoPartidoUiAApi(partido.estado),
-      destacado_portada: partido.destacado_portada,
+      destacado_portada: sinPuntosEnTabla ? false : partido.destacado_portada,
+      es_playoff: fecha.es_playoff,
     }
 
     if (partido.id > 0) {
@@ -250,11 +261,27 @@ export async function actualizarEstadoPartidoEnApi(
   partido: PartidoAdmin,
   estado: EstadoPartido,
 ): Promise<void> {
-  const cuerpo: { estado: ReturnType<typeof estadoPartidoUiAApi>; goles_local?: null; goles_visitante?: null } =
-    { estado: estadoPartidoUiAApi(estado) }
+  const cuerpo: {
+    estado: ReturnType<typeof estadoPartidoUiAApi>
+    goles_local?: null
+    goles_visitante?: null
+    fecha_hora?: null
+  } = { estado: estadoPartidoUiAApi(estado) }
   if (estado === 'PROGRAMADO') {
     cuerpo.goles_local = null
     cuerpo.goles_visitante = null
+  }
+  if (estado === 'REPROGRAMADO') {
+    cuerpo.goles_local = null
+    cuerpo.goles_visitante = null
+    cuerpo.fecha_hora = null
+    partido.fecha_hora = ''
+  }
+  if (estado === 'SUSPENDIDO') {
+    cuerpo.goles_local = null
+    cuerpo.goles_visitante = null
+    partido.goles_local = null
+    partido.goles_visitante = null
   }
   await actualizarPartido(partido.id, cuerpo)
   await cargarPartidosAdmin()

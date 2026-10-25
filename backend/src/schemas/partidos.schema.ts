@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-const estadoPartidoEnum = z.enum(["Pendiente", "Jugado", "Suspendido"]);
+const estadoPartidoEnum = z.enum([
+  "Pendiente",
+  "Jugado",
+  "Suspendido",
+  "Reprogramado",
+]);
 const enteroPositivo = z.coerce.number().int().positive();
 
 const equiposDistintos = (datos: {
@@ -21,6 +26,7 @@ export const esquemaCrearPartido = z
     cancha: z.string().trim().min(1).max(100).optional().default("Cancha 1"),
     estado: estadoPartidoEnum.optional().default("Pendiente"),
     destacado_portada: z.boolean().optional().default(false),
+    es_playoff: z.boolean().optional().default(false),
   })
   .refine(equiposDistintos, {
     message: "El equipo local y el visitante deben ser distintos",
@@ -40,6 +46,7 @@ export const esquemaActualizarPartido = z
     cancha: z.string().trim().min(1).max(100).optional(),
     estado: estadoPartidoEnum.optional(),
     destacado_portada: z.boolean().optional(),
+    es_playoff: z.boolean().optional(),
   })
   .refine(
     (datos) =>
@@ -53,7 +60,8 @@ export const esquemaActualizarPartido = z
       datos.fecha_hora !== undefined ||
       datos.cancha !== undefined ||
       datos.estado !== undefined ||
-      datos.destacado_portada !== undefined,
+      datos.destacado_portada !== undefined ||
+      datos.es_playoff !== undefined,
     { message: "Debe enviar al menos un campo para actualizar" }
   )
   .refine(
@@ -79,3 +87,34 @@ export const esquemaIdPartido = z.coerce
 
 export type DatosCrearPartido = z.infer<typeof esquemaCrearPartido>;
 export type DatosActualizarPartido = z.infer<typeof esquemaActualizarPartido>;
+
+const crucePropuestoSchema = z
+  .object({
+    equipo_local_id: enteroPositivo,
+    equipo_visitante_id: enteroPositivo,
+    numero_partido: z.number().int().positive().optional(),
+  })
+  .refine(equiposDistintos, {
+    message: "El equipo local y el visitante deben ser distintos",
+    path: ["equipo_visitante_id"],
+  });
+
+export const esquemaGenerarAleatoriosFecha = z.object({
+  torneo_id: enteroPositivo,
+  numero_fecha: z.number().int().positive(),
+});
+
+export const esquemaGenerarPlayoffs = z.object({
+  torneo_id: enteroPositivo,
+  cantidad_clasificados: z
+    .number()
+    .int()
+    .positive()
+    .refine((n) => n % 2 === 0, "Debe ser un número par"),
+  formato: z.enum(["estandar", "aleatorio"]).optional().default("estandar"),
+  clasificados_ids: z.array(enteroPositivo).optional(),
+  cruces: z.array(crucePropuestoSchema).optional(),
+});
+
+export type DatosGenerarAleatoriosFecha = z.infer<typeof esquemaGenerarAleatoriosFecha>;
+export type DatosGenerarPlayoffs = z.infer<typeof esquemaGenerarPlayoffs>;

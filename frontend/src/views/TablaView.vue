@@ -2,15 +2,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { estadioUrl } from '../assets/imagenes'
 import TablaRegularPanel from '../components/tabla/TablaRegularPanel.vue'
+import TablaPlayoffsPanel from '../components/tabla/TablaPlayoffsPanel.vue'
 import { POSICIONES_PLAYOFF } from '../components/home/homeTablaZonas'
 import { useTablaPosiciones } from '../composables/useTablaPosiciones'
 
 const faseSeleccionada = ref<'regular' | 'playoffs'>('regular')
-const faseHabilitada = ref(true)
-
-const octavos = Array.from({ length: 8 }, (_, i) => i + 1)
-const cuartos = Array.from({ length: 4 }, (_, i) => i + 1)
-const semis = Array.from({ length: 2 }, (_, i) => i + 1)
 
 const { filas, cargando, error, cargarTabla } = useTablaPosiciones()
 const equiposTabla = computed(() => filas.value)
@@ -126,134 +122,7 @@ function seleccionarFase(fase: 'regular' | 'playoffs') {
         :error="error"
       />
 
-      <div
-        v-else
-        class="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/40 p-3 shadow-sm backdrop-blur-sm sm:p-5"
-      >
-        <p class="mb-3 text-center text-[11px] text-slate-500 sm:hidden">
-          Deslizá horizontalmente para ver el cuadro completo
-        </p>
-        <div
-          class="overflow-x-auto overscroll-x-contain transition-opacity duration-300"
-          :class="faseHabilitada ? 'opacity-100' : 'opacity-50'"
-        >
-          <div
-            class="flex h-[920px] min-h-[920px] w-full min-w-[52rem] flex-row gap-12"
-          >
-            <div class="flex h-full min-h-0 w-1/4 flex-col">
-              <h2
-                class="mb-3 shrink-0 text-center text-xs font-bold uppercase tracking-[0.2em] text-sky-300/90"
-              >
-                Octavos
-              </h2>
-              <div class="bracket-ronda flex min-h-0 flex-1 flex-col">
-                <div
-                  v-for="n in octavos"
-                  :key="`oct-${n}`"
-                  class="bracket-ronda-celda flex min-h-0 flex-1 items-center justify-center py-1"
-                >
-                  <div
-                    class="bracket-partido w-full shrink-0 border border-slate-700/50 bg-slate-900/70 backdrop-blur-sm"
-                  >
-                    <div class="bracket-slot">Equipo —</div>
-                    <div class="bracket-slot">Equipo —</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex h-full min-h-0 w-1/4 flex-col">
-              <h2
-                class="mb-3 shrink-0 text-center text-xs font-bold uppercase tracking-[0.2em] text-sky-300/90"
-              >
-                Cuartos
-              </h2>
-              <div class="bracket-ronda flex min-h-0 flex-1 flex-col">
-                <div
-                  v-for="n in cuartos"
-                  :key="`cua-${n}`"
-                  class="bracket-ronda-celda flex min-h-0 flex-1 items-center justify-center py-1"
-                >
-                  <div
-                    class="bracket-partido w-full shrink-0 border border-slate-700/50 bg-slate-900/70 backdrop-blur-sm"
-                  >
-                    <div class="bracket-slot">Equipo —</div>
-                    <div class="bracket-slot">Equipo —</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex h-full min-h-0 w-1/4 flex-col">
-              <h2
-                class="mb-3 shrink-0 text-center text-xs font-bold uppercase tracking-[0.2em] text-sky-300/90"
-              >
-                Semis
-              </h2>
-              <div class="bracket-ronda flex min-h-0 flex-1 flex-col">
-                <div
-                  v-for="n in semis"
-                  :key="`sem-${n}`"
-                  class="bracket-ronda-celda flex min-h-0 flex-1 items-center justify-center py-1"
-                >
-                  <div
-                    class="bracket-partido w-full shrink-0 border border-slate-700/50 bg-slate-900/70 backdrop-blur-sm"
-                  >
-                    <div class="bracket-slot">Equipo —</div>
-                    <div class="bracket-slot">Equipo —</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex h-full min-h-0 w-1/4 flex-col">
-              <h2
-                class="mb-3 shrink-0 text-center text-xs font-bold uppercase tracking-[0.2em] text-yellow-400/90"
-              >
-                Final
-              </h2>
-              <div class="bracket-ronda flex min-h-0 flex-1 flex-col">
-                <div
-                  class="bracket-ronda-celda flex min-h-0 flex-1 items-center justify-center py-1"
-                >
-                  <div
-                    class="bracket-partido bracket-partido--final w-full max-w-[11rem] shrink-0 border border-slate-700/50 bg-slate-900/70 backdrop-blur-sm ring-1 ring-yellow-500/25"
-                  >
-                    <div class="bracket-slot">Equipo —</div>
-                    <div class="bracket-slot">Equipo —</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          v-if="!faseHabilitada"
-          class="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/60 px-6 backdrop-blur-md"
-        >
-          <div class="max-w-md text-center">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              class="mx-auto h-14 w-14 text-yellow-400 drop-shadow-[0_0_12px_rgba(250,204,21,0.45)]"
-              aria-hidden="true"
-            >
-              <path
-                fill-rule="evenodd"
-                d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6.75a3 3 0 0 0-3-3v-3A5.25 5.25 0 0 0 12 1.5Zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5Z"
-                clip-rule="evenodd"
-              />
-            </svg>
-            <p
-              class="mt-5 font-oswald text-base font-bold uppercase leading-relaxed tracking-wide text-white sm:text-lg"
-            >
-              Fase de playoffs bloqueada. Disponible al finalizar la fase regular
-            </p>
-          </div>
-        </div>
-      </div>
+      <TablaPlayoffsPanel v-else />
     </section>
   </div>
 </template>
@@ -272,51 +141,4 @@ function seleccionarFase(fase: 'regular' | 'playoffs') {
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.4));
 }
 
-.bracket-partido {
-  position: relative;
-  overflow: hidden;
-  border-radius: 0.75rem;
-  box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.bracket-partido:hover {
-  border-color: rgb(250 204 21 / 0.25);
-}
-
-.bracket-slot {
-  display: flex;
-  min-height: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid rgb(63 63 70 / 0.45);
-  padding: 0.5rem 0.75rem;
-  text-align: center;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgb(161 161 170);
-}
-
-.bracket-partido .bracket-slot:last-child {
-  border-bottom: none;
-}
-
-.bracket-partido::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  right: -1rem;
-  width: 1rem;
-  height: 1px;
-  background: rgb(82 82 91 / 0.85);
-  transform: translateY(-50%);
-}
-
-.bracket-partido--final::after {
-  display: none;
-}
 </style>

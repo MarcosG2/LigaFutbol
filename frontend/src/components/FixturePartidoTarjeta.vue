@@ -31,9 +31,11 @@ const tieneResultado = computed(
     (props.partido.golesLocal !== null && props.partido.golesVisitante !== null),
 )
 
-const etiquetaEstado = computed(() =>
-  tieneResultado.value ? 'Finalizado' : 'Programado',
-)
+const etiquetaEstado = computed(() => {
+  if (props.partido.estado === 'Reprogramado') return 'Reprogramado'
+  if (props.partido.estado === 'Suspendido') return 'Suspendido'
+  return tieneResultado.value ? 'Finalizado' : 'Programado'
+})
 </script>
 
 <template>

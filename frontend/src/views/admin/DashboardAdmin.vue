@@ -33,7 +33,7 @@ type PartidoReciente = {
   visitante: EquipoResumen
   golesLocal: number | null
   golesVisitante: number | null
-  estado: 'FINALIZADO' | 'PROGRAMADO'
+  estado: 'FINALIZADO' | 'PROGRAMADO' | 'SUSPENDIDO' | 'REPROGRAMADO'
 }
 
 type FilaTabla = {
@@ -116,7 +116,14 @@ async function cargarDashboard() {
         visitante,
         golesLocal: partido.goles_local,
         golesVisitante: partido.goles_visitante,
-        estado: estadoUi === 'FINALIZADO' ? 'FINALIZADO' : 'PROGRAMADO',
+        estado:
+          estadoUi === 'FINALIZADO'
+            ? 'FINALIZADO'
+            : estadoUi === 'SUSPENDIDO'
+              ? 'SUSPENDIDO'
+              : estadoUi === 'REPROGRAMADO'
+                ? 'REPROGRAMADO'
+                : 'PROGRAMADO',
       }
     })
 
@@ -142,6 +149,12 @@ function clasesPosicion(posicion: number): string {
 function clasesBadgeEstado(estado: PartidoReciente['estado']): string {
   if (estado === 'FINALIZADO') {
     return 'bg-green-500/15 text-green-400 ring-1 ring-green-500/30'
+  }
+  if (estado === 'SUSPENDIDO') {
+    return 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30'
+  }
+  if (estado === 'REPROGRAMADO') {
+    return 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30'
   }
   return 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/30'
 }

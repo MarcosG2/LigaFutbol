@@ -16,6 +16,7 @@ export async function crearPartido(datos: {
   fecha_hora?: string | null
   estado?: EstadoPartidoApi
   destacado_portada?: boolean
+  es_playoff?: boolean
 }): Promise<PartidoApi> {
   return solicitar<PartidoApi>('/partidos', { method: 'POST', body: datos })
 }
@@ -33,6 +34,7 @@ export async function actualizarPartido(
     fecha_hora: string | null
     estado: EstadoPartidoApi
     destacado_portada: boolean
+    es_playoff: boolean
   }>,
 ): Promise<PartidoApi> {
   return solicitar<PartidoApi>(`/partidos/${id}`, { method: 'PUT', body: datos })

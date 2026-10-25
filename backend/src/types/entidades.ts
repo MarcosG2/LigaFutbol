@@ -1,7 +1,11 @@
 /** Tipos alineados con el esquema `liga_futbol` (referencia para controllers). */
 
 export type EstadoEquipo = "Activo" | "Inactivo";
-export type EstadoPartido = "Pendiente" | "Jugado" | "Suspendido";
+export type EstadoPartido =
+  | "Pendiente"
+  | "Jugado"
+  | "Suspendido"
+  | "Reprogramado";
 export type EstadoTorneo = "Activo" | "Finalizado";
 
 export interface Administrador {
@@ -45,6 +49,7 @@ export interface Partido {
   cancha: string;
   estado: EstadoPartido | null;
   destacado_portada: boolean;
+  es_playoff: boolean;
 }
 
 export interface Torneo {

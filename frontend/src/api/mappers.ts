@@ -55,13 +55,15 @@ export function mapaEquiposPorId(equipos: EquipoApi[]): Map<number, EquipoResume
 
 export function estadoPartidoApiAUi(estado: EstadoPartidoApi | null): EstadoPartidoUi {
   if (estado === 'Jugado') return 'FINALIZADO'
-  if (estado === 'Suspendido') return 'EN_JUEGO'
+  if (estado === 'Suspendido') return 'SUSPENDIDO'
+  if (estado === 'Reprogramado') return 'REPROGRAMADO'
   return 'PROGRAMADO'
 }
 
 export function estadoPartidoUiAApi(estado: EstadoPartidoUi): EstadoPartidoApi {
   if (estado === 'FINALIZADO') return 'Jugado'
-  if (estado === 'EN_JUEGO') return 'Suspendido'
+  if (estado === 'SUSPENDIDO') return 'Suspendido'
+  if (estado === 'REPROGRAMADO') return 'Reprogramado'
   return 'Pendiente'
 }
 

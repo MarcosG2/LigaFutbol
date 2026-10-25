@@ -119,6 +119,7 @@ export async function obtenerTablaPosiciones(
     `SELECT id, nombre, escudo_url FROM Equipos ORDER BY nombre ASC`
   );
 
+  // Solo partidos Jugado suman PJ y puntos; Suspendido/Reprogramado/Pendiente no cuentan.
   const [filasPartidos] = await pool.execute<RowDataPacket[]>(
     `SELECT equipo_local_id, equipo_visitante_id, goles_local, goles_visitante
      FROM Partidos

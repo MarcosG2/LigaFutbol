@@ -29,12 +29,51 @@ defineProps<{
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
-        fill="currentColor"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
         class="h-4 w-4"
+        aria-hidden="true"
       >
-        <path
-          d="M6 3h12v2h1a1 1 0 0 1 1 1v2H4V6a1 1 0 0 1 1-1h1V3zm2 16H7v-2H5v4h14v-4h-2v2h-1v-5H8v5zm2-14h8V4H8v1zM6 9v8h12V9H6zm2 2h2v4H8v-4zm4 0h4v4h-4v-4z"
-        />
+        <path d="M3 20h18" />
+        <path d="M4.5 20v-6.5a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 .75.75V20" />
+        <path d="M10.25 20V9a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75V20" />
+        <path d="M16.75 20v-3.5a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 .75.75V20" />
+        <text
+          x="7.25"
+          y="17"
+          fill="currentColor"
+          stroke="none"
+          font-size="5"
+          font-weight="700"
+          text-anchor="middle"
+        >
+          2
+        </text>
+        <text
+          x="12.5"
+          y="15.5"
+          fill="currentColor"
+          stroke="none"
+          font-size="5"
+          font-weight="700"
+          text-anchor="middle"
+        >
+          1
+        </text>
+        <text
+          x="17.75"
+          y="18.25"
+          fill="currentColor"
+          stroke="none"
+          font-size="5"
+          font-weight="700"
+          text-anchor="middle"
+        >
+          3
+        </text>
       </svg>
     </template>
 

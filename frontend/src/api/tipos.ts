@@ -1,7 +1,11 @@
 export type EstadoEquipo = 'Activo' | 'Inactivo'
-export type EstadoPartidoApi = 'Pendiente' | 'Jugado' | 'Suspendido'
+export type EstadoPartidoApi = 'Pendiente' | 'Jugado' | 'Suspendido' | 'Reprogramado'
 export type EstadoTorneo = 'Activo' | 'Finalizado'
-export type EstadoPartidoUi = 'PROGRAMADO' | 'FINALIZADO' | 'EN_JUEGO'
+export type EstadoPartidoUi =
+  | 'PROGRAMADO'
+  | 'FINALIZADO'
+  | 'SUSPENDIDO'
+  | 'REPROGRAMADO'
 
 export interface AdministradorPublico {
   id: number
@@ -42,6 +46,7 @@ export interface PartidoApi {
   cancha: string | null
   estado: EstadoPartidoApi | null
   destacado_portada: boolean
+  es_playoff: boolean
 }
 
 export interface TorneoApi {

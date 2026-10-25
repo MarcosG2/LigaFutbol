@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
 import AvisoDialog from '../../components/AvisoDialog.vue'
+import ModalPlayoffsAdmin from '../../components/admin/ModalPlayoffsAdmin.vue'
+import { generarPartidosAleatoriosFecha, type CruceGeneradoApi } from '../../api/fixtureApi'
 import { listarEquipos } from '../../api/equiposApi'
 import { obtenerTorneoActivo } from '../../api/torneosApi'
 import {
@@ -37,7 +39,10 @@ onMounted(async () => {
 })
 
 const modalAbierto = ref(false)
+const modalPlayoffsAbierto = ref(false)
 const guardandoFecha = ref(false)
+const generandoAleatorios = ref(false)
+const equipoFechaLibre = ref<{ equipo_id: number; nombre: string } | null>(null)
 const anclaUltimoPartido = ref<HTMLElement | null>(null)
 const destacadoPortadaInvalido = ref(false)
 const avisoDialog = ref({
@@ -59,6 +64,7 @@ const fechasExpandidas = ref<Record<number, boolean>>({ 1: true })
 const fechaEnEdicion = ref<FechaTorneo>({
   id_fecha: 0,
   numero: 1,
+  es_playoff: false,
   partidos: [],
 })
 
@@ -85,6 +91,7 @@ function fechaVacia(): FechaTorneo {
   return {
     id_fecha: 0,
     numero: siguienteNumero,
+    es_playoff: false,
     partidos: [partidoVacio()],
   }
 }
@@ -131,6 +138,7 @@ function partidoVacio(): Partido {
     goles_local: null,
     goles_visitante: null,
     destacado_portada: esPrimerPartido,
+    es_playoff: fechaEnEdicion.value.es_playoff,
   }
 }
 
@@ -198,7 +206,53 @@ function buscarPartido(idFecha: number, idPartido: number): Partido | undefined 
   return fecha?.partidos.find((p) => p.id === idPartido)
 }
 
+function partidoElegibleDestacadoPortada(estado: EstadoPartido): boolean {
+  return estado !== 'REPROGRAMADO' && estado !== 'SUSPENDIDO'
+}
+
+function reasignarDestacadoSiHaceFalta() {
+  const partidos = fechaEnEdicion.value.partidos
+  const elegibles = partidos.filter((p) => partidoElegibleDestacadoPortada(p.estado))
+  if (elegibles.length === 0) {
+    partidos.forEach((p) => {
+      p.destacado_portada = false
+    })
+    return
+  }
+  const destacadoActual = partidos.find((p) => p.destacado_portada)
+  if (!destacadoActual || !partidoElegibleDestacadoPortada(destacadoActual.estado)) {
+    const indice = partidos.findIndex((p) => partidoElegibleDestacadoPortada(p.estado))
+    if (indice >= 0) marcarDestacadoPortada(indice)
+  }
+}
+
+function aplicarEstadoReprogramadoEnFormulario(partido: Partido) {
+  partido.goles_local = null
+  partido.goles_visitante = null
+  partido.fecha_hora = ''
+  if (partido.destacado_portada) {
+    partido.destacado_portada = false
+    reasignarDestacadoSiHaceFalta()
+  }
+}
+
+function aplicarEstadoSuspendidoEnFormulario(partido: Partido) {
+  partido.goles_local = null
+  partido.goles_visitante = null
+  if (partido.destacado_portada) {
+    partido.destacado_portada = false
+    reasignarDestacadoSiHaceFalta()
+  }
+}
+
 async function alCambiarEstadoPartido(partido: Partido) {
+  if (partido.estado === 'REPROGRAMADO') {
+    aplicarEstadoReprogramadoEnFormulario(partido)
+  }
+  if (partido.estado === 'SUSPENDIDO') {
+    aplicarEstadoSuspendidoEnFormulario(partido)
+  }
+
   if (partido.id <= 0) {
     if (partido.estado === 'PROGRAMADO') {
       partido.goles_local = null
@@ -281,11 +335,13 @@ function abrirEditarFecha(fecha: FechaTorneo) {
   fechaAnteriorAlEditar.value = {
     id_fecha: fecha.id_fecha,
     numero: fecha.numero,
+    es_playoff: fecha.es_playoff,
     partidos: fecha.partidos.map((p) => ({ ...p })),
   }
   fechaEnEdicion.value = {
     id_fecha: fecha.id_fecha,
     numero: fecha.numero,
+    es_playoff: fecha.es_playoff,
     partidos: fecha.partidos.map((p, indice) => ({
       ...p,
       numero_partido: p.numero_partido ?? indice + 1,
@@ -304,7 +360,96 @@ function cerrarModal() {
   fechaAnteriorAlEditar.value = null
   fechaEnEdicion.value = fechaVacia()
   destacadoPortadaInvalido.value = false
+  equipoFechaLibre.value = null
   cerrarAviso()
+}
+
+function nombreEquipoPorId(id: number): string {
+  return equipos.value.find((e) => e.id === id)?.nombre ?? `Equipo ${id}`
+}
+
+function partidosDesdeCruces(cruces: CruceGeneradoApi[]): Partido[] {
+  return cruces.map((cruce, indice) => ({
+    id: 0,
+    numero_partido: cruce.numero_partido ?? indice + 1,
+    local: nombreEquipoPorId(cruce.equipo_local_id),
+    visitante: nombreEquipoPorId(cruce.equipo_visitante_id),
+    equipo_local_id: cruce.equipo_local_id,
+    equipo_visitante_id: cruce.equipo_visitante_id,
+    fecha_hora: '',
+    cancha: 'Cancha 1',
+    estado: 'PROGRAMADO',
+    goles_local: null,
+    goles_visitante: null,
+    destacado_portada: indice === 0,
+    es_playoff: fechaEnEdicion.value.es_playoff,
+  }))
+}
+
+function aplicarCrucesAlFormulario(cruces: CruceGeneradoApi[]) {
+  if (cruces.length === 0) {
+    mostrarAviso('No hay cruces para aplicar.')
+    return
+  }
+  fechaEnEdicion.value.partidos = partidosDesdeCruces(cruces)
+  asegurarDestacadoUnico()
+  destacadoPortadaInvalido.value = false
+}
+
+async function generarPartidosAleatoriosEnModal() {
+  generandoAleatorios.value = true
+  equipoFechaLibre.value = null
+  try {
+    const torneo = await obtenerTorneoActivo()
+    if (!torneo) {
+      mostrarAviso('No hay torneo activo.', 'Torneo requerido')
+      return
+    }
+
+    const numero = fechaEnEdicion.value.numero
+    if (!numero || numero < 1) {
+      mostrarAviso('Indicá el número de fecha antes de generar.')
+      return
+    }
+
+    const resultado = await generarPartidosAleatoriosFecha({
+      torneo_id: torneo.id,
+      numero_fecha: numero,
+    })
+
+    aplicarCrucesAlFormulario(resultado.partidos)
+    equipoFechaLibre.value = resultado.equipo_fecha_libre
+    await nextTick()
+    anclaUltimoPartido.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  } catch (error) {
+    const mensaje =
+      error instanceof Error ? error.message : 'No se pudieron generar los partidos aleatorios.'
+    mostrarAviso(mensaje, 'Generación aleatoria')
+  } finally {
+    generandoAleatorios.value = false
+  }
+}
+
+function abrirModalPlayoffs() {
+  modalPlayoffsAbierto.value = true
+}
+
+function cerrarModalPlayoffs() {
+  modalPlayoffsAbierto.value = false
+}
+
+function aplicarPlayoffsAlFixture(payload: { numeroFecha: number; cruces: CruceGeneradoApi[] }) {
+  fechaAnteriorAlEditar.value = null
+  fechaEnEdicion.value = {
+    id_fecha: 0,
+    numero: payload.numeroFecha,
+    es_playoff: true,
+    partidos: partidosDesdeCruces(payload.cruces),
+  }
+  asegurarDestacadoUnico()
+  equipoFechaLibre.value = null
+  modalPlayoffsAbierto.value = false
+  modalAbierto.value = true
 }
 
 async function agregarPartidoEnFormulario() {
@@ -354,8 +499,11 @@ function clasesEstado(estado: EstadoPartido): string {
   if (estado === 'FINALIZADO') {
     return 'bg-green-500/15 text-green-400 ring-1 ring-green-500/30'
   }
-  if (estado === 'EN_JUEGO') {
+  if (estado === 'SUSPENDIDO') {
     return 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30'
+  }
+  if (estado === 'REPROGRAMADO') {
+    return 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30'
   }
   return 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/30'
 }
@@ -398,8 +546,14 @@ function validarPartido(partido: Partido, indice: number): string | null {
   if (partido.local === partido.visitante) {
     return `${etiqueta}: local y visitante no pueden ser el mismo equipo.`
   }
-  if (!partido.fecha_hora) {
+  if (partido.estado !== 'REPROGRAMADO' && !partido.fecha_hora) {
     return `${etiqueta}: indicá fecha y hora.`
+  }
+  if (
+    (partido.estado === 'REPROGRAMADO' || partido.estado === 'SUSPENDIDO') &&
+    tieneResultado(partido)
+  ) {
+    return `${etiqueta}: ${partido.estado} no puede tener resultado cargado (no suma en la tabla).`
   }
   if (!partido.cancha.trim()) {
     return `${etiqueta}: indicá la cancha.`
@@ -445,21 +599,34 @@ async function guardarFecha() {
   }
 
   asegurarDestacadoUnico()
-  const cantidadDestacados = fechaEnEdicion.value.partidos.filter((p) => p.destacado_portada).length
-  if (cantidadDestacados !== 1) {
-    destacadoPortadaInvalido.value = true
-    mostrarAviso(
-      'Elegí exactamente un partido con la opción «Destacado en portada» (el círculo junto a cada cruce). Ese partido se muestra en la portada del sitio.',
-      'Partido destacado',
-    )
-    return
+  const partidosElegiblesDestacado = fechaEnEdicion.value.partidos.filter((p) =>
+    partidoElegibleDestacadoPortada(p.estado),
+  )
+  if (partidosElegiblesDestacado.length > 0) {
+    const cantidadDestacados = partidosElegiblesDestacado.filter((p) => p.destacado_portada).length
+    if (cantidadDestacados !== 1) {
+      destacadoPortadaInvalido.value = true
+      mostrarAviso(
+        'Elegí exactamente un partido con la opción «Destacado en portada» (el círculo junto a cada cruce). Ese partido se muestra en la portada del sitio.',
+        'Partido destacado',
+      )
+      return
+    }
+  } else {
+    fechaEnEdicion.value.partidos.forEach((p) => {
+      p.destacado_portada = false
+    })
   }
   destacadoPortadaInvalido.value = false
 
   const payload: FechaTorneo = {
     id_fecha: numero,
     numero,
-    partidos: fechaEnEdicion.value.partidos.map((partido) => ({ ...partido })),
+    es_playoff: fechaEnEdicion.value.es_playoff,
+    partidos: fechaEnEdicion.value.partidos.map((partido) => ({
+      ...partido,
+      es_playoff: fechaEnEdicion.value.es_playoff,
+    })),
   }
 
   guardandoFecha.value = true
@@ -532,24 +699,33 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
         </p>
       </div>
 
-      <button
-        type="button"
-        class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-4 py-2.5 text-sm font-extrabold tracking-wide text-black uppercase shadow-lg shadow-yellow-500/20 transition-[filter] hover:brightness-105"
-        @click="abrirNuevaFecha"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          class="h-4 w-4"
-          aria-hidden="true"
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-violet-500/40 px-4 py-2.5 text-sm font-bold tracking-wide text-violet-200 uppercase transition-colors hover:bg-violet-500/10"
+          @click="abrirModalPlayoffs"
         >
-          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
-        </svg>
-        Nueva Fecha
-      </button>
+          Generar playoffs
+        </button>
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-4 py-2.5 text-sm font-extrabold tracking-wide text-black uppercase shadow-lg shadow-yellow-500/20 transition-[filter] hover:brightness-105"
+          @click="abrirNuevaFecha"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-4 w-4"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+          </svg>
+          Nueva Fecha
+        </button>
+      </div>
     </header>
 
     <section v-if="fechasOrdenadas.length === 0" class="rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-6 py-16 text-center">
@@ -583,7 +759,15 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
               {{ fecha.numero }}
             </span>
             <div class="min-w-0">
-              <h3 class="text-base font-semibold text-white">Fecha {{ fecha.numero }}</h3>
+              <div class="flex flex-wrap items-center gap-2">
+                <h3 class="text-base font-semibold text-white">Fecha {{ fecha.numero }}</h3>
+                <span
+                  v-if="fecha.es_playoff"
+                  class="rounded-md bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wider text-violet-300 uppercase ring-1 ring-violet-500/30"
+                >
+                  Playoffs
+                </span>
+              </div>
               <p class="text-xs text-zinc-500">
                 {{ fecha.partidos.length }} partido(s)
                 <span class="mx-1">·</span>
@@ -766,7 +950,8 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
           <div
             class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 pb-6 sm:px-6 sm:pb-8"
           >
-            <div class="max-w-xs">
+            <div class="flex flex-wrap items-end gap-6">
+              <div class="max-w-xs flex-1">
               <label for="numero-fecha" class="mb-1.5 block text-sm font-medium text-zinc-300">
                 Número de fecha
               </label>
@@ -778,6 +963,17 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
                 required
                 class="w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2.5 text-sm text-white tabular-nums focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20"
               />
+              </div>
+              <label
+                class="flex cursor-pointer items-center gap-2 rounded-lg border border-violet-500/30 bg-violet-500/5 px-3 py-2.5 text-sm text-violet-100"
+              >
+                <input
+                  v-model="fechaEnEdicion.es_playoff"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-zinc-600 text-violet-500 focus:ring-violet-500/30"
+                />
+                Fecha de playoffs
+              </label>
             </div>
 
             <div
@@ -794,9 +990,49 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
               >
                 Marcá un solo cruce como <strong>Destacado en portada</strong>.
               </p>
-              <h4 class="text-sm font-semibold tracking-wide text-yellow-400 uppercase">
-                Partidos de la fecha
-              </h4>
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h4 class="text-sm font-semibold tracking-wide text-yellow-400 uppercase">
+                  Partidos de la fecha
+                </h4>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-500/40 px-3 py-2 text-xs font-semibold text-sky-200 transition-colors hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="generandoAleatorios || guardandoFecha"
+                  @click="generarPartidosAleatoriosEnModal"
+                >
+                  <svg
+                    v-if="generandoAleatorios"
+                    class="h-3.5 w-3.5 animate-spin"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    />
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  {{ generandoAleatorios ? 'Generando…' : 'Generar partidos aleatorios' }}
+                </button>
+              </div>
+
+              <p
+                v-if="equipoFechaLibre"
+                class="rounded-xl border border-zinc-700/80 bg-zinc-950/50 px-3 py-2 text-sm text-zinc-300"
+              >
+                Fecha libre:
+                <span class="font-semibold text-yellow-400">{{ equipoFechaLibre.nombre }}</span>
+              </p>
 
               <div
                 v-for="(partido, indice) in fechaEnEdicion.partidos"
@@ -943,7 +1179,8 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
                       @change="alCambiarEstadoPartido(partido)"
                     >
                       <option value="PROGRAMADO">PROGRAMADO</option>
-                      <option value="EN_JUEGO">EN_JUEGO</option>
+                      <option value="SUSPENDIDO">SUSPENDIDO</option>
+                      <option value="REPROGRAMADO">REPROGRAMADO</option>
                       <option value="FINALIZADO">FINALIZADO</option>
                     </select>
                   </div>
@@ -1123,6 +1360,13 @@ async function eliminarPartidoDeFecha(idFecha: number, idPartido: number) {
         </form>
       </div>
     </Teleport>
+
+    <ModalPlayoffsAdmin
+      :abierto="modalPlayoffsAbierto"
+      :equipos="equipos"
+      @cerrar="cerrarModalPlayoffs"
+      @aplicar="aplicarPlayoffsAlFixture"
+    />
 
     <AvisoDialog
       :abierto="avisoDialog.abierto"

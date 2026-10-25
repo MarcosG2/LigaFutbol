@@ -7,7 +7,7 @@ import type {
 import type { Partido } from "../types/entidades.js";
 
 const columnasSelect =
-  "id, torneo_id, numero_fecha, numero_partido, equipo_local_id, equipo_visitante_id, goles_local, goles_visitante, fecha_hora, cancha, estado, destacado_portada";
+  "id, torneo_id, numero_fecha, numero_partido, equipo_local_id, equipo_visitante_id, goles_local, goles_visitante, fecha_hora, cancha, estado, destacado_portada, es_playoff";
 
 function filaAPartido(fila: RowDataPacket): Partido {
   const canchaRaw = fila.cancha as string | null | undefined;
@@ -19,6 +19,7 @@ function filaAPartido(fila: RowDataPacket): Partido {
     ...(fila as Partido),
     cancha,
     destacado_portada: Boolean(fila.destacado_portada),
+    es_playoff: Boolean(fila.es_playoff),
   };
 }
 
@@ -75,6 +76,7 @@ export async function crearPartido(datos: DatosCrearPartido): Promise<Partido> {
     cancha = "Cancha 1",
     estado,
     destacado_portada = false,
+    es_playoff = false,
   } = datos;
 
   if (destacado_portada) {
@@ -84,8 +86,8 @@ export async function crearPartido(datos: DatosCrearPartido): Promise<Partido> {
   const [resultado] = await pool.execute<ResultSetHeader>(
     `INSERT INTO Partidos (
       torneo_id, numero_fecha, numero_partido, equipo_local_id, equipo_visitante_id,
-      goles_local, goles_visitante, fecha_hora, cancha, estado, destacado_portada
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      goles_local, goles_visitante, fecha_hora, cancha, estado, destacado_portada, es_playoff
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       torneo_id,
       numero_fecha ?? null,
@@ -98,6 +100,7 @@ export async function crearPartido(datos: DatosCrearPartido): Promise<Partido> {
       cancha,
       estado,
       destacado_portada ? 1 : 0,
+      es_playoff ? 1 : 0,
     ]
   );
 
@@ -158,6 +161,10 @@ export async function actualizarPartido(
   if (datos.destacado_portada !== undefined) {
     asignaciones.push("destacado_portada = ?");
     valores.push(datos.destacado_portada ? 1 : 0);
+  }
+  if (datos.es_playoff !== undefined) {
+    asignaciones.push("es_playoff = ?");
+    valores.push(datos.es_playoff ? 1 : 0);
   }
 
   const partidoActual = await buscarPartidoPorId(id);

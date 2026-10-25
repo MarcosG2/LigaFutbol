@@ -10,6 +10,7 @@ export const ORDEN_MIGRACIONES = [
   "migracion-destacado-portada.sql",
   "migracion-sanciones.sql",
   "migracion-cancha-partido.sql",
+  "migracion-estado-reprogramado.sql",
 ] as const;
 
 export type NombreMigracion = (typeof ORDEN_MIGRACIONES)[number];
