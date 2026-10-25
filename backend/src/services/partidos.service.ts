@@ -9,6 +9,22 @@ import type { Partido } from "../types/entidades.js";
 const columnasSelect =
   "id, torneo_id, numero_fecha, numero_partido, equipo_local_id, equipo_visitante_id, goles_local, goles_visitante, fecha_hora, cancha, estado, destacado_portada, es_playoff";
 
+const columnasSelectSinPlayoff =
+  "id, torneo_id, numero_fecha, numero_partido, equipo_local_id, equipo_visitante_id, goles_local, goles_visitante, fecha_hora, cancha, estado, destacado_portada";
+
+const ordenListadoPartidos =
+  "ORDER BY numero_fecha IS NULL, numero_fecha ASC, numero_partido IS NULL, numero_partido ASC, fecha_hora IS NULL, fecha_hora ASC, id ASC";
+
+function esErrorColumnaFaltante(error: unknown, columna: string): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const err = error as { code?: string; sqlMessage?: string };
+  return (
+    err.code === "ER_BAD_FIELD_ERROR" &&
+    typeof err.sqlMessage === "string" &&
+    err.sqlMessage.includes(columna)
+  );
+}
+
 function filaAPartido(fila: RowDataPacket): Partido {
   const canchaRaw = fila.cancha as string | null | undefined;
   const cancha =
@@ -45,18 +61,35 @@ async function quitarDestacadosEnFecha(
 }
 
 async function buscarPartidoPorId(id: number): Promise<Partido | null> {
-  const [filas] = await pool.execute<RowDataPacket[]>(
-    `SELECT ${columnasSelect} FROM Partidos WHERE id = ?`,
-    [id]
-  );
-  return filas.length > 0 ? filaAPartido(filas[0]) : null;
+  try {
+    const [filas] = await pool.execute<RowDataPacket[]>(
+      `SELECT ${columnasSelect} FROM Partidos WHERE id = ?`,
+      [id]
+    );
+    return filas.length > 0 ? filaAPartido(filas[0]) : null;
+  } catch (error) {
+    if (!esErrorColumnaFaltante(error, "es_playoff")) throw error;
+    const [filas] = await pool.execute<RowDataPacket[]>(
+      `SELECT ${columnasSelectSinPlayoff} FROM Partidos WHERE id = ?`,
+      [id]
+    );
+    return filas.length > 0 ? filaAPartido(filas[0]) : null;
+  }
 }
 
 export async function listarPartidos(): Promise<Partido[]> {
-  const [filas] = await pool.execute<RowDataPacket[]>(
-    `SELECT ${columnasSelect} FROM Partidos ORDER BY numero_fecha IS NULL, numero_fecha ASC, numero_partido IS NULL, numero_partido ASC, fecha_hora IS NULL, fecha_hora ASC, id ASC`
-  );
-  return filas.map((fila) => filaAPartido(fila));
+  try {
+    const [filas] = await pool.execute<RowDataPacket[]>(
+      `SELECT ${columnasSelect} FROM Partidos ${ordenListadoPartidos}`
+    );
+    return filas.map((fila) => filaAPartido(fila));
+  } catch (error) {
+    if (!esErrorColumnaFaltante(error, "es_playoff")) throw error;
+    const [filas] = await pool.execute<RowDataPacket[]>(
+      `SELECT ${columnasSelectSinPlayoff} FROM Partidos ${ordenListadoPartidos}`
+    );
+    return filas.map((fila) => filaAPartido(fila));
+  }
 }
 
 export async function obtenerPartidoPorId(id: number): Promise<Partido | null> {

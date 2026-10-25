@@ -9,6 +9,7 @@ import {
 } from "../schemas/partidos.schema.js";
 import * as fixtureGeneradorService from "../services/fixtureGenerador.service.js";
 import * as partidosService from "../services/partidos.service.js";
+import { intentarGenerarSiguienteRondaPlayoff } from "../services/playoffsAvance.service.js";
 
 function responderErrorValidacion(res: Response, error: ZodError): void {
   res.status(400).json({
@@ -85,6 +86,13 @@ export async function actualizarPartido(req: Request, res: Response): Promise<vo
       res.status(404).json({ mensaje: "Partido no encontrado" });
       return;
     }
+
+    try {
+      await intentarGenerarSiguienteRondaPlayoff(partido);
+    } catch (avanceError) {
+      console.error("Error al avanzar ronda de playoffs:", avanceError);
+    }
+
     res.json(partido);
   } catch (error) {
     console.error(error);

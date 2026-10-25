@@ -50,13 +50,55 @@ function flexDeRonda(indiceRonda: number): number {
   >
     <p v-if="cargando" class="py-16 text-center text-sm text-slate-400">Cargando cuadro de playoffs…</p>
     <p v-else-if="error" class="py-12 text-center text-sm text-red-300">{{ error }}</p>
-    <p
+
+    <div
       v-else-if="!hayPlayoffs"
-      class="py-16 text-center text-sm text-slate-400"
+      class="relative min-h-[22rem] overflow-hidden rounded-xl sm:min-h-[26rem]"
     >
-      Todavía no hay fechas de playoffs cargadas en el fixture. El administrador puede generarlas desde
-      Gestión del fixture.
-    </p>
+      <div
+        class="pointer-events-none flex min-h-[22rem] flex-row items-stretch gap-6 px-2 opacity-25 blur-[1px] sm:min-h-[26rem]"
+        aria-hidden="true"
+      >
+        <div class="flex w-52 shrink-0 flex-col justify-center gap-8 py-8">
+          <div class="h-20 rounded-lg border border-slate-700/60 bg-slate-900/80" />
+          <div class="h-20 rounded-lg border border-slate-700/60 bg-slate-900/80" />
+        </div>
+        <div class="flex w-14 shrink-0 items-center justify-center">
+          <div class="h-1/2 w-full border-y border-r border-slate-600/50" />
+        </div>
+        <div class="flex w-52 shrink-0 flex-col justify-center py-8">
+          <div class="h-20 rounded-lg border border-slate-700/60 bg-slate-900/80" />
+        </div>
+      </div>
+
+      <div
+        class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-black/55 px-6 backdrop-blur-md"
+      >
+        <div class="max-w-md text-center">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            class="mx-auto h-14 w-14 text-yellow-400 drop-shadow-[0_0_12px_rgba(250,204,21,0.45)]"
+            aria-hidden="true"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6.75a3 3 0 0 0-3-3v-3A5.25 5.25 0 0 0 12 1.5Zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5Z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          <p
+            class="mt-5 font-oswald text-base font-bold uppercase leading-relaxed tracking-wide text-white sm:text-lg"
+          >
+            Se está jugando la fase regular
+          </p>
+          <p class="mt-2 text-sm text-slate-400">
+            El cuadro de playoffs se habilitará cuando el administrador cargue la fase eliminatoria.
+          </p>
+        </div>
+      </div>
+    </div>
 
     <template v-else>
       <p class="mb-3 text-center text-[11px] text-slate-500 sm:hidden">
@@ -153,6 +195,10 @@ function flexDeRonda(indiceRonda: number): number {
 </template>
 
 <style scoped>
+.font-oswald {
+  font-family: 'Oswald', system-ui, sans-serif;
+}
+
 .bracket-scroll {
   overflow-y: visible;
 }
