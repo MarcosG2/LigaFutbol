@@ -7,6 +7,7 @@ export type EstadoPartido =
   | "Suspendido"
   | "Reprogramado";
 export type EstadoTorneo = "Activo" | "Finalizado";
+export type EstadoInscripcionTorneo = "ACTIVE" | "WITHDRAWN" | "REPLACED";
 
 export interface Administrador {
   id: number;
@@ -58,10 +59,21 @@ export interface Torneo {
   estado: EstadoTorneo | null;
 }
 
+export interface TorneoEquipo {
+  id: number;
+  torneo_id: number;
+  equipo_id: number;
+  status: EstadoInscripcionTorneo;
+  joined_from_round: number;
+  withdrawn_at_round: number | null;
+}
+
 export interface FilaTablaPosicion {
   equipo_id: number;
   nombre: string;
   escudo_url: string | null;
+  status_inscripcion?: EstadoInscripcionTorneo;
+  joined_from_round?: number;
   pj: number;
   pg: number;
   pe: number;

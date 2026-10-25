@@ -1,5 +1,6 @@
+import { ErrorApi } from './cliente'
 import { solicitar } from './cliente'
-import type { EstadoTorneo, FilaTablaApi, TorneoApi } from './tipos'
+import type { EquipoApi, EstadoTorneo, FilaTablaApi, TorneoApi } from './tipos'
 
 export async function listarTorneos(): Promise<TorneoApi[]> {
   return solicitar<TorneoApi[]>('/torneos')
@@ -40,9 +41,34 @@ let torneoActivoCache: TorneoApi | null = null
 
 export async function obtenerTorneoActivo(): Promise<TorneoApi | null> {
   if (torneoActivoCache) return torneoActivoCache
-  const torneos = await listarTorneos()
-  torneoActivoCache = torneos.find((t) => t.estado === 'Activo') ?? torneos[0] ?? null
-  return torneoActivoCache
+  try {
+    torneoActivoCache = await solicitar<TorneoApi>('/torneos/activo')
+    return torneoActivoCache
+  } catch (error) {
+    if (error instanceof ErrorApi && error.status === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+export async function listarEquiposDelTorneo(torneoId: number): Promise<EquipoApi[]> {
+  return solicitar<EquipoApi[]>(`/torneos/${torneoId}/equipos`)
+}
+
+export async function inscribirEquipoEnTorneo(
+  torneoId: number,
+  equipoId: number,
+  joinedFromRound = 1,
+): Promise<void> {
+  await solicitar(`/torneos/${torneoId}/equipos`, {
+    method: 'POST',
+    body: { equipo_id: equipoId, joined_from_round: joinedFromRound },
+  })
+}
+
+export async function retirarEquipoDeTorneo(torneoId: number, equipoId: number): Promise<void> {
+  await solicitar<void>(`/torneos/${torneoId}/equipos/${equipoId}`, { method: 'DELETE' })
 }
 
 export function limpiarCacheTorneoActivo(): void {

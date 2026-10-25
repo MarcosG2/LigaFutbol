@@ -10,8 +10,14 @@ import {
   subirEscudoEquipo,
 } from '../../api/equiposApi'
 import { listarJugadores } from '../../api/jugadoresApi'
-import type { JugadorApi } from '../../api/tipos'
+import type { EquipoApi, EstadoEquipo, JugadorApi } from '../../api/tipos'
 import { ErrorApi } from '../../api/cliente'
+import {
+  inscribirEquipoEnTorneo,
+  listarEquiposDelTorneo,
+  obtenerTorneoActivo,
+  retirarEquipoDeTorneo,
+} from '../../api/torneosApi'
 import EditorEscudoModal from '../../components/admin/EditorEscudoModal.vue'
 import { encuadrarImagenEscudo } from '../../utils/encuadrarImagenEscudo'
 import { optimizarImagenEscudo } from '../../utils/optimizarImagenEscudo'
@@ -29,6 +35,7 @@ type Equipo = {
   id: number
   nombre: string
   escudoUrl: string | null
+  estado: EstadoEquipo
   jugadores: Jugador[]
 }
 
@@ -40,6 +47,13 @@ const cargando = ref(false)
 const guardando = ref(false)
 
 const busqueda = ref('')
+const mostrarInactivos = ref(true)
+const torneoActivoNombre = ref<string | null>(null)
+const torneoActivoId = ref<number | null>(null)
+const idsInscriptosTorneoActivo = ref<Set<number>>(new Set())
+const equiposCatalogoParaAgregar = ref<EquipoApi[]>([])
+const modalAgregarCatalogoAbierto = ref(false)
+const equipoCatalogoSeleccionado = ref<number | ''>('')
 const modalAbierto = ref(false)
 const inputArchivoExcel = ref<HTMLInputElement | null>(null)
 const inputArchivoEscudo = ref<HTMLInputElement | null>(null)
@@ -67,15 +81,22 @@ const equipoActual = ref<Equipo>({
   id: 0,
   nombre: '',
   escudoUrl: null,
+  estado: 'Activo',
   jugadores: [],
 })
 
 const equiposFiltrados = computed(() => {
   const termino = busqueda.value.trim().toLowerCase()
-  if (!termino) return equipos.value
-
-  return equipos.value.filter((equipo) => equipo.nombre.toLowerCase().includes(termino))
+  return equipos.value.filter((equipo) => {
+    if (!mostrarInactivos.value && equipo.estado === 'Inactivo') return false
+    if (!termino) return true
+    return equipo.nombre.toLowerCase().includes(termino)
+  })
 })
+
+const cantidadInactivos = computed(
+  () => equipos.value.filter((equipo) => equipo.estado === 'Inactivo').length,
+)
 
 const tituloModal = computed(() =>
   equipoActual.value.id ? 'Editar equipo' : 'Nuevo equipo',
@@ -100,8 +121,60 @@ const textoValidacionPlantilla = computed(() => {
   return `Mínimo ${MIN_JUGADORES} - Máximo ${MAX_JUGADORES} jugadores`
 })
 
+function estadoDesdeApi(estado: EstadoEquipo | null | undefined): EstadoEquipo {
+  return estado === 'Inactivo' ? 'Inactivo' : 'Activo'
+}
+
+function abrirModalAgregarCatalogo() {
+  if (!torneoActivoId.value) {
+    window.alert('No hay torneo activo. Creá uno en Administración → Torneo.')
+    return
+  }
+  if (equiposCatalogoParaAgregar.value.length === 0) {
+    window.alert('No hay más clubes en el catálogo para agregar a este torneo.')
+    return
+  }
+  equipoCatalogoSeleccionado.value = ''
+  modalAgregarCatalogoAbierto.value = true
+}
+
+function cerrarModalAgregarCatalogo() {
+  modalAgregarCatalogoAbierto.value = false
+  equipoCatalogoSeleccionado.value = ''
+}
+
+async function confirmarAgregarDelCatalogo() {
+  if (!torneoActivoId.value || equipoCatalogoSeleccionado.value === '') return
+  try {
+    await inscribirEquipoEnTorneo(
+      torneoActivoId.value,
+      Number(equipoCatalogoSeleccionado.value),
+    )
+    cerrarModalAgregarCatalogo()
+    await cargarEquiposDesdeApi()
+  } catch (error) {
+    const mensaje = error instanceof ErrorApi ? error.message : 'No se pudo inscribir el equipo.'
+    window.alert(mensaje)
+  }
+}
+
+async function retirarDeTorneoActivo(equipoId: number, nombre: string) {
+  if (!torneoActivoId.value) return
+  const confirmar = window.confirm(
+    `¿Quitar a «${nombre}» del torneo «${torneoActivoNombre.value}»? El club sigue guardado y podés volver a inscribirlo.`,
+  )
+  if (!confirmar) return
+  try {
+    await retirarEquipoDeTorneo(torneoActivoId.value, equipoId)
+    await cargarEquiposDesdeApi()
+  } catch (error) {
+    const mensaje = error instanceof ErrorApi ? error.message : 'No se pudo quitar el equipo del torneo.'
+    window.alert(mensaje)
+  }
+}
+
 function equipoVacio(): Equipo {
-  return { id: 0, nombre: '', escudoUrl: null, jugadores: [] }
+  return { id: 0, nombre: '', escudoUrl: null, estado: 'Activo', jugadores: [] }
 }
 
 function inicialesEquipo(nombre: string): string {
@@ -261,6 +334,43 @@ function agregarJugador() {
 
 function quitarJugador(indice: number) {
   equipoActual.value.jugadores.splice(indice, 1)
+}
+
+function claveFilaJugador(jugador: Jugador, indice: number): string {
+  return jugador.id !== undefined ? `id-${jugador.id}` : `nuevo-${indice}`
+}
+
+function validarDorsalJugador(indice: number) {
+  const jugador = equipoActual.value.jugadores[indice]
+  if (!jugador) return
+
+  const dorsal = Number(jugador.dorsal)
+  if (!Number.isFinite(dorsal) || dorsal < 1 || !Number.isInteger(dorsal)) {
+    window.alert('El dorsal debe ser un número entero mayor a 0.')
+    jugador.dorsal = 1
+    return
+  }
+
+  jugador.dorsal = dorsal
+
+  const duplicado = equipoActual.value.jugadores.some(
+    (otro, i) => i !== indice && otro.dorsal === dorsal,
+  )
+  if (duplicado) {
+    window.alert(`El dorsal ${dorsal} ya está asignado en este equipo.`)
+    return
+  }
+
+  equipoActual.value.jugadores.sort((a, b) => a.dorsal - b.dorsal)
+}
+
+function normalizarNombreJugador(indice: number) {
+  const jugador = equipoActual.value.jugadores[indice]
+  if (!jugador) return
+  jugador.nombre = jugador.nombre.trim()
+  if (!jugador.nombre) {
+    window.alert('El nombre del jugador no puede quedar vacío.')
+  }
 }
 
 function abrirSelectorExcel() {
@@ -424,10 +534,32 @@ function aplicarEquipoEnLista(equipo: Equipo) {
 async function cargarEquiposDesdeApi() {
   cargando.value = true
   try {
-    const [listaEquipos, listaJugadores] = await Promise.all([
-      listarEquipos(),
+    const torneo = await obtenerTorneoActivo()
+    if (!torneo) {
+      torneoActivoId.value = null
+      torneoActivoNombre.value = null
+      idsInscriptosTorneoActivo.value = new Set()
+      equiposCatalogoParaAgregar.value = []
+      equipos.value = []
+      return
+    }
+
+    torneoActivoId.value = torneo.id
+    torneoActivoNombre.value = torneo.nombre
+
+    const [inscriptos, listaJugadores, catalogo] = await Promise.all([
+      listarEquiposDelTorneo(torneo.id),
       listarJugadores(),
+      listarEquipos(),
     ])
+
+    idsInscriptosTorneoActivo.value = new Set(inscriptos.map((equipo) => equipo.id))
+    equiposCatalogoParaAgregar.value = catalogo
+      .filter(
+        (equipo) =>
+          equipo.estado !== 'Inactivo' && !idsInscriptosTorneoActivo.value.has(equipo.id),
+      )
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 
     const mapa = new Map<number, JugadorApi[]>()
     for (const jugador of listaJugadores) {
@@ -436,10 +568,11 @@ async function cargarEquiposDesdeApi() {
       mapa.set(jugador.equipo_id, lista)
     }
 
-    equipos.value = listaEquipos.map((equipo) => ({
+    equipos.value = inscriptos.map((equipo) => ({
       id: equipo.id,
       nombre: equipo.nombre,
       escudoUrl: equipo.escudo_url,
+      estado: estadoDesdeApi(equipo.estado),
       jugadores: jugadoresDesdeApi(mapa.get(equipo.id) ?? []),
     }))
   } catch {
@@ -462,8 +595,25 @@ async function guardarEquipo() {
     return
   }
 
+  const dorsales = new Set<number>()
+  for (const jugador of equipoActual.value.jugadores) {
+    const nombre = jugador.nombre.trim()
+    if (!nombre) {
+      window.alert('Hay jugadores sin nombre. Completalos antes de guardar.')
+      return
+    }
+    jugador.nombre = nombre
+    if (dorsales.has(jugador.dorsal)) {
+      window.alert(`El dorsal ${jugador.dorsal} está repetido en la plantilla.`)
+      return
+    }
+    dorsales.add(jugador.dorsal)
+  }
+
   guardando.value = true
   let guardadoOk = false
+  const eraEquipoNuevo = equipoActual.value.id === 0
+  let equipoIdGuardado = 0
   try {
     const jugadoresPayload = equipoActual.value.jugadores.map((jugador) => ({
       ...(jugador.id !== undefined ? { id: jugador.id } : {}),
@@ -475,19 +625,23 @@ async function guardarEquipo() {
     let escudoUrl = equipoActual.value.escudoUrl
     let jugadoresGuardados = equipoActual.value.jugadores.map((jugador) => ({ ...jugador }))
 
+    const estado = equipoActual.value.estado
+
     if (equipoId) {
       const original = equipos.value.find((equipo) => equipo.id === equipoId)
       const nombreCambio = original?.nombre !== nombre
+      const estadoCambio = original?.estado !== estado
       const quitarEscudo = escudoMarcadoParaEliminar.value && !escudoArchivoPendiente.value
       const plantillaCambio = plantillaModificada(
         original?.jugadores ?? [],
         equipoActual.value.jugadores,
       )
 
-      if (nombreCambio || quitarEscudo) {
+      if (nombreCambio || quitarEscudo || estadoCambio) {
         const actualizado = await actualizarEquipo(equipoId, {
           ...(nombreCambio ? { nombre } : {}),
           ...(quitarEscudo ? { escudo_url: null } : {}),
+          ...(estadoCambio ? { estado } : {}),
         })
         escudoUrl = actualizado.escudo_url
       } else if (original) {
@@ -501,7 +655,7 @@ async function guardarEquipo() {
     } else {
       const creado = await crearEquipo({
         nombre,
-        estado: 'Activo',
+        estado,
         jugadores: jugadoresPayload.map(({ nombre: nombreJugador, numero_camiseta }) => ({
           nombre: nombreJugador,
           numero_camiseta,
@@ -526,10 +680,13 @@ async function guardarEquipo() {
       reiniciarEncuadreEscudo()
     }
 
+    equipoIdGuardado = equipoId
+
     aplicarEquipoEnLista({
       id: equipoId,
       nombre,
       escudoUrl,
+      estado,
       jugadores: jugadoresGuardados,
     })
     guardadoOk = true
@@ -540,7 +697,18 @@ async function guardarEquipo() {
     guardando.value = false
   }
 
+  if (guardadoOk && eraEquipoNuevo && torneoActivoId.value && equipoIdGuardado > 0) {
+    try {
+      await inscribirEquipoEnTorneo(torneoActivoId.value, equipoIdGuardado)
+    } catch {
+      window.alert(
+        'El equipo se guardó, pero no se pudo inscribir en el torneo activo. Podés hacerlo desde Torneo.',
+      )
+    }
+  }
+
   if (guardadoOk) {
+    await cargarEquiposDesdeApi()
     cerrarModal()
   }
 }
@@ -572,7 +740,21 @@ onMounted(() => {
         Gestión de <span class="text-yellow-400">equipos</span>
       </h2>
       <p class="mt-2 text-sm text-zinc-400 sm:text-base">
-        Clubes y plantillas del torneo.
+        Solo ves los equipos inscriptos en el torneo en curso. Podés crear uno nuevo o sumar un club
+        que ya existía en temporadas anteriores desde el catálogo.
+      </p>
+      <p
+        v-if="torneoActivoNombre"
+        class="mt-2 text-xs text-yellow-400/90"
+      >
+        Torneo activo: {{ torneoActivoNombre }} · {{ equipos.length }} equipo(s) en esta edición
+        <RouterLink to="/admin/torneo" class="ml-1 underline hover:text-yellow-300">
+          Más opciones en Torneo
+        </RouterLink>
+      </p>
+      <p v-else class="mt-2 text-xs text-amber-400/90">
+        No hay torneo activo. Los equipos no se mostrarán en la web hasta que haya un torneo Activo
+        con inscripciones.
       </p>
     </header>
 
@@ -610,9 +792,32 @@ onMounted(() => {
           />
         </div>
 
+        <label
+          v-if="cantidadInactivos > 0"
+          class="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-950/50 px-3 py-2.5 text-xs text-zinc-300"
+        >
+          <input
+            v-model="mostrarInactivos"
+            type="checkbox"
+            class="rounded border-zinc-600 text-yellow-500 focus:ring-yellow-500/30"
+          />
+          Mostrar inactivos ({{ cantidadInactivos }})
+        </label>
+
+        <button
+          v-if="torneoActivoId"
+          type="button"
+          class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-zinc-700/80 bg-zinc-950/50 px-4 py-2.5 text-sm font-semibold text-sky-300 transition-colors hover:border-sky-500/40 hover:bg-sky-500/10 disabled:opacity-50"
+          :disabled="equiposCatalogoParaAgregar.length === 0"
+          @click="abrirModalAgregarCatalogo"
+        >
+          Agregar del catálogo
+        </button>
+
         <button
           type="button"
-          class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-4 py-2.5 text-sm font-extrabold tracking-wide text-black uppercase shadow-lg shadow-yellow-500/20 transition-[filter] hover:brightness-105"
+          class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-4 py-2.5 text-sm font-extrabold tracking-wide text-black uppercase shadow-lg shadow-yellow-500/20 transition-[filter] hover:brightness-105 disabled:opacity-50"
+          :disabled="!torneoActivoId"
           @click="abrirModalNuevo"
         >
           <svg
@@ -637,14 +842,28 @@ onMounted(() => {
               class="border-b border-zinc-800/80 text-left text-[11px] font-semibold tracking-wider text-zinc-500 uppercase"
             >
               <th class="px-5 py-3">Nombre</th>
+              <th class="px-3 py-3">Estado</th>
               <th class="px-3 py-3">Cantidad de jugadores</th>
               <th class="px-5 py-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="equiposFiltrados.length === 0" class="border-b border-zinc-800/60">
-              <td colspan="3" class="px-5 py-12 text-center text-zinc-500">
-                No hay equipos que coincidan con la búsqueda.
+              <td colspan="4" class="px-5 py-12 text-center text-zinc-500">
+                <template v-if="!torneoActivoId">
+                  No hay torneo activo. Creá uno en
+                  <RouterLink to="/admin/torneo" class="text-yellow-400 hover:text-yellow-300">
+                    Torneo
+                  </RouterLink>.
+                </template>
+                <template v-else-if="equipos.length === 0">
+                  Todavía no hay equipos en «{{ torneoActivoNombre }}». Usá
+                  <strong class="text-zinc-400">Nuevo equipo</strong> o
+                  <strong class="text-zinc-400">Agregar del catálogo</strong>.
+                </template>
+                <template v-else>
+                  No hay equipos que coincidan con la búsqueda.
+                </template>
               </td>
             </tr>
             <tr
@@ -665,8 +884,25 @@ onMounted(() => {
                     />
                     <span v-else>{{ inicialesEquipo(equipo.nombre) }}</span>
                   </span>
-                  <span class="font-medium text-white">{{ equipo.nombre }}</span>
+                  <span
+                    class="font-medium"
+                    :class="equipo.estado === 'Inactivo' ? 'text-zinc-400' : 'text-white'"
+                  >
+                    {{ equipo.nombre }}
+                  </span>
                 </div>
+              </td>
+              <td class="px-3 py-3.5">
+                <span
+                  class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase"
+                  :class="
+                    equipo.estado === 'Activo'
+                      ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                      : 'border border-zinc-600 bg-zinc-800/80 text-zinc-400'
+                  "
+                >
+                  {{ equipo.estado }}
+                </span>
               </td>
               <td class="px-3 py-3.5">
                 <span
@@ -687,10 +923,17 @@ onMounted(() => {
                   </button>
                   <button
                     type="button"
+                    class="rounded-lg border border-zinc-700/80 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300"
+                    @click="retirarDeTorneoActivo(equipo.id, equipo.nombre)"
+                  >
+                    Quitar del torneo
+                  </button>
+                  <button
+                    type="button"
                     class="rounded-lg border border-zinc-700/80 px-2.5 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400"
                     @click="eliminarEquipoPorId(equipo.id)"
                   >
-                    Eliminar
+                    Eliminar club
                   </button>
                 </div>
               </td>
@@ -772,6 +1015,24 @@ onMounted(() => {
                     class="w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20"
                     placeholder="Ej. Tuca FC"
                   />
+                </div>
+
+                <div>
+                  <label for="equipo-estado" class="mb-1.5 block text-sm font-medium text-zinc-300">
+                    Estado en la liga
+                  </label>
+                  <select
+                    id="equipo-estado"
+                    v-model="equipoActual.estado"
+                    class="w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2.5 text-sm text-white focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20"
+                  >
+                    <option value="Activo">Activo — participa en el torneo</option>
+                    <option value="Inactivo">Inactivo — ya no forma parte de la liga</option>
+                  </select>
+                  <p class="mt-1.5 text-xs text-zinc-500">
+                    Los inactivos no se muestran en la página pública de equipos. El historial de
+                    partidos se conserva.
+                  </p>
                 </div>
 
                 <div>
@@ -1003,13 +1264,31 @@ onMounted(() => {
                     </tr>
                     <tr
                       v-for="(jugador, indice) in equipoActual.jugadores"
-                      :key="`${jugador.dorsal}-${indice}`"
+                      :key="claveFilaJugador(jugador, indice)"
                       class="border-b border-zinc-800/60 last:border-b-0 hover:bg-zinc-800/20"
                     >
-                      <td class="px-4 py-2.5 font-bold tabular-nums text-yellow-400">
-                        {{ jugador.dorsal }}
+                      <td class="px-3 py-2">
+                        <input
+                          v-model.number="jugador.dorsal"
+                          type="number"
+                          min="1"
+                          max="99"
+                          :aria-label="`Dorsal de ${jugador.nombre || 'jugador'}`"
+                          class="w-16 rounded-lg border border-zinc-700 bg-zinc-950/60 px-2 py-1.5 text-sm font-bold tabular-nums text-yellow-400 focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20"
+                          @change="validarDorsalJugador(indice)"
+                        />
                       </td>
-                      <td class="px-3 py-2.5 text-white">{{ jugador.nombre }}</td>
+                      <td class="px-3 py-2">
+                        <input
+                          v-model="jugador.nombre"
+                          type="text"
+                          autocomplete="off"
+                          :aria-label="`Nombre del jugador con dorsal ${jugador.dorsal}`"
+                          class="w-full min-w-[12rem] rounded-lg border border-zinc-700 bg-zinc-950/60 px-2.5 py-1.5 text-sm text-white placeholder:text-zinc-500 focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20"
+                          placeholder="Nombre y apellido"
+                          @blur="normalizarNombreJugador(indice)"
+                        />
+                      </td>
                       <td class="px-4 py-2.5 text-right">
                         <button
                           type="button"
@@ -1097,6 +1376,70 @@ onMounted(() => {
             </button>
           </footer>
         </form>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="modalAgregarCatalogoAbierto"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-agregar-catalogo"
+      >
+        <div
+          class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          aria-hidden="true"
+          @click="cerrarModalAgregarCatalogo"
+        />
+        <div
+          class="relative z-10 w-full max-w-md overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl"
+        >
+          <header class="border-b border-zinc-800/80 px-6 py-4">
+            <h3 id="titulo-agregar-catalogo" class="text-lg font-semibold text-white">
+              Agregar club del catálogo
+            </h3>
+            <p class="mt-1 text-sm text-zinc-400">
+              Inscribe un equipo que ya existía en otra temporada en «{{ torneoActivoNombre }}».
+            </p>
+          </header>
+          <div class="px-6 py-5">
+            <label for="equipo-catalogo" class="mb-1.5 block text-sm font-medium text-zinc-300">
+              Club
+            </label>
+            <select
+              id="equipo-catalogo"
+              v-model="equipoCatalogoSeleccionado"
+              class="w-full rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-2.5 text-sm text-white focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20"
+            >
+              <option value="">Elegí un equipo…</option>
+              <option
+                v-for="equipo in equiposCatalogoParaAgregar"
+                :key="equipo.id"
+                :value="equipo.id"
+              >
+                {{ equipo.nombre }}
+              </option>
+            </select>
+          </div>
+          <footer class="flex justify-end gap-2 border-t border-zinc-800/80 px-6 py-4">
+            <button
+              type="button"
+              class="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+              @click="cerrarModalAgregarCatalogo"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="rounded-lg bg-gradient-to-b from-[#ffe566] via-[#f5c518] to-[#d4920a] px-4 py-2 text-sm font-bold text-black disabled:opacity-50"
+              :disabled="equipoCatalogoSeleccionado === ''"
+              @click="confirmarAgregarDelCatalogo"
+            >
+              Inscribir en el torneo
+            </button>
+          </footer>
+        </div>
       </div>
     </Teleport>
 

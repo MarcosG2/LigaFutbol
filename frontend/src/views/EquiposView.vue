@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { estadioUrl } from '../assets/imagenes'
 import { colorEscudoPorIndice, inicialesDeNombre } from '../api/mappers'
-import { listarEquipos } from '../api/equiposApi'
+import { cargarContextoTorneoActivo } from '../composables/cargarContextoTorneoActivo'
 import { listarJugadores } from '../api/jugadoresApi'
 import EquipoCard from '../components/equipos/EquipoCard.vue'
 import EquiposSkeleton from '../components/equipos/EquiposSkeleton.vue'
@@ -90,14 +90,15 @@ async function cargarEquiposDesdeApi() {
   cargando.value = true
   errorCarga.value = null
   try {
-    const [equiposApi, jugadoresApi] = await Promise.all([listarEquipos(), listarJugadores()])
+    const [{ equipos: equiposApi }, jugadoresApi] = await Promise.all([
+      cargarContextoTorneoActivo(),
+      listarJugadores(),
+    ])
 
     equipos.value = equiposApi.map((equipo, indice) => ({
       id: equipo.id,
       nombre: equipo.nombre,
-      subtitulo:
-        equipo.instagram?.trim() ||
-        (equipo.estado === 'Activo' ? 'Equipo activo' : 'Equipo del torneo'),
+      subtitulo: equipo.instagram?.trim() || 'Equipo activo',
       iniciales: inicialesDeNombre(equipo.nombre) || 'EQ',
       colorEscudo: colorEscudoPorIndice(indice),
       escudoUrl: equipo.escudo_url,

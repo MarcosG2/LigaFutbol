@@ -1,6 +1,7 @@
 import type { RowDataPacket } from "mysql2/promise";
 import { pool } from "../db/db.js";
 import type { Partido } from "../types/entidades.js";
+import { listarEquiposActivosEnTorneo } from "./torneoEquipos.service.js";
 import { obtenerTablaPosiciones } from "./torneos.service.js";
 
 export type CrucePropuesto = {
@@ -84,17 +85,6 @@ function numerarCruces(cruces: CrucePropuesto[]): CrucePropuesto[] {
   }));
 }
 
-async function listarEquiposActivosIds(): Promise<{ id: number; nombre: string }[]> {
-  const [filas] = await pool.execute<RowDataPacket[]>(
-    `SELECT id, nombre FROM Equipos
-     WHERE estado IS NULL OR estado = 'Activo'
-     ORDER BY nombre ASC`
-  );
-  return filas.map((fila) => ({
-    id: fila.id as number,
-    nombre: fila.nombre as string,
-  }));
-}
 
 async function listarPartidosTorneo(torneoId: number): Promise<Partido[]> {
   const [filas] = await pool.execute<RowDataPacket[]>(
@@ -135,7 +125,7 @@ export async function generarPartidosAleatoriosParaFecha(
   torneoId: number,
   numeroFecha: number
 ): Promise<ResultadoGeneracionAleatoria> {
-  const equipos = await listarEquiposActivosIds();
+  const equipos = await listarEquiposActivosEnTorneo(torneoId);
   if (equipos.length < 2) {
     throw new Error("Se necesitan al menos dos equipos activos para generar cruces.");
   }

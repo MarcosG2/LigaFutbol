@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { listarEquipos } from '../api/equiposApi'
+import { cargarContextoTorneoActivo } from './cargarContextoTorneoActivo'
 import {
   canchaDePartido,
   formatearFechaDia,
@@ -7,7 +7,6 @@ import {
   mapaEquiposPorId,
   partidoConNombres,
 } from '../api/mappers'
-import { listarPartidos } from '../api/partidosApi'
 import {
   obtenerNumeroProximaFecha,
   obtenerNumeroUltimaFechaResultados,
@@ -69,7 +68,7 @@ export function useDatosInicio() {
   async function cargarDatosInicio() {
     cargando.value = true
     try {
-      const [equipos, partidos] = await Promise.all([listarEquipos(), listarPartidos()])
+      const { equipos, partidos } = await cargarContextoTorneoActivo()
       totalEquipos.value = equipos.length
       const mapa = mapaEquiposPorId(equipos)
 

@@ -141,7 +141,8 @@ export async function cargarPartidosAdmin(): Promise<void> {
   try {
     const equipos = await listarEquipos()
     mapaNombresEquipos.value = new Map(equipos.map((e) => [e.id, e.nombre]))
-    const partidos = await listarPartidos()
+    const torneo = await obtenerTorneoActivo()
+    const partidos = torneo ? await listarPartidos(torneo.id) : []
     fechasPartidosAdmin.value = agruparPartidos(partidos)
   } finally {
     cargandoPartidosAdmin.value = false

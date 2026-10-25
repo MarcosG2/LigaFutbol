@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { listarEquipos } from '../api/equiposApi'
+import { cargarContextoTorneoActivo } from '../composables/cargarContextoTorneoActivo'
 import {
   canchaDePartido,
   formatearFechaDia,
@@ -8,7 +8,6 @@ import {
   mapaEquiposPorId,
   partidoConNombres,
 } from '../api/mappers'
-import { listarPartidos } from '../api/partidosApi'
 import { estadioUrl } from '../assets/imagenes'
 import FixturePartidoTarjeta, {
   type PartidoFixtureTarjeta,
@@ -111,7 +110,7 @@ watch(fechasVisiblesCount, () => {
 async function cargarFixture() {
   cargando.value = true
   try {
-    const [equipos, partidos] = await Promise.all([listarEquipos(), listarPartidos()])
+    const { equipos, partidos } = await cargarContextoTorneoActivo()
     const mapa = mapaEquiposPorId(equipos)
     const porFecha = new Map<number, PartidoFixtureTarjeta[]>()
 

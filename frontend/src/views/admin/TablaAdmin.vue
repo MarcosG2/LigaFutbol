@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { colorEscudoPorIndice, inicialesDeNombre } from '../../api/mappers'
-import { listarSancionesTorneo, registrarSancionTorneo } from '../../api/sancionesApi'
+import {
+  actualizarSancionTorneo,
+  eliminarSancionTorneo,
+  listarSancionesTorneo,
+  registrarSancionTorneo,
+} from '../../api/sancionesApi'
 import { obtenerTablaTorneo, obtenerTorneoActivo } from '../../api/torneosApi'
 
 type SancionEquipo = {
@@ -27,7 +32,8 @@ type EquipoTabla = {
 }
 
 type EntradaLogInfraccion = {
-  id: string
+  id: number
+  equipoId: number
   fecha: string
   nombreEquipo: string
   puntosRestados: number
@@ -43,10 +49,12 @@ type FilaTabla = EquipoTabla & {
 const equipos = ref<EquipoTabla[]>([])
 const torneoActivoId = ref<number | null>(null)
 const guardandoSancion = ref(false)
+const eliminandoSancion = ref(false)
 
 function mapearSancionesAlLog(sanciones: Awaited<ReturnType<typeof listarSancionesTorneo>>) {
   logInfraccionesGlobal.value = sanciones.map((sancion) => ({
-    id: String(sancion.id),
+    id: sancion.id,
+    equipoId: sancion.equipo_id,
     fecha: sancion.creado_en,
     nombreEquipo: sancion.nombre_equipo,
     puntosRestados: sancion.puntos,
@@ -109,10 +117,15 @@ onMounted(() => {
 const logInfraccionesGlobal = ref<EntradaLogInfraccion[]>([])
 
 const modalSancionAbierto = ref(false)
+const modalEditarInfraccionAbierto = ref(false)
 const panelLogAbierto = ref(false)
 const equipoSancionId = ref<number | null>(null)
+const infraccionEditandoId = ref<number | null>(null)
 const puntosADescontar = ref<number | ''>('')
 const motivoInfraccion = ref('')
+const equipoEditarId = ref<number | null>(null)
+const puntosEditar = ref<number | ''>('')
+const motivoEditar = ref('')
 
 const equipoEnSancion = computed(() =>
   equipos.value.find((e) => e.id === equipoSancionId.value) ?? null,
@@ -176,6 +189,72 @@ function abrirPanelLog() {
 
 function cerrarPanelLog() {
   panelLogAbierto.value = false
+}
+
+function abrirModalEditarInfraccion(entrada: EntradaLogInfraccion) {
+  infraccionEditandoId.value = entrada.id
+  equipoEditarId.value = entrada.equipoId
+  puntosEditar.value = entrada.puntosRestados
+  motivoEditar.value = entrada.motivo
+  modalEditarInfraccionAbierto.value = true
+}
+
+function cerrarModalEditarInfraccion() {
+  modalEditarInfraccionAbierto.value = false
+  infraccionEditandoId.value = null
+  equipoEditarId.value = null
+}
+
+async function confirmarEdicionInfraccion() {
+  if (infraccionEditandoId.value === null || torneoActivoId.value === null) return
+  if (equipoEditarId.value === null) return
+
+  const puntos = puntosEditar.value === '' ? NaN : Number(puntosEditar.value)
+  const motivo = motivoEditar.value.trim()
+
+  if (!Number.isFinite(puntos) || puntos <= 0 || !Number.isInteger(puntos)) {
+    window.alert('Ingresá una cantidad entera de puntos mayor a 0.')
+    return
+  }
+
+  if (!motivo) {
+    window.alert('Indicá el motivo de la infracción.')
+    return
+  }
+
+  guardandoSancion.value = true
+  try {
+    await actualizarSancionTorneo(torneoActivoId.value, infraccionEditandoId.value, {
+      equipo_id: equipoEditarId.value,
+      puntos,
+      motivo,
+    })
+    await cargarTablaAdmin()
+    cerrarModalEditarInfraccion()
+  } catch {
+    window.alert('No se pudo actualizar la infracción. Verificá que estés logueado como admin.')
+  } finally {
+    guardandoSancion.value = false
+  }
+}
+
+async function eliminarInfraccion(entrada: EntradaLogInfraccion) {
+  if (torneoActivoId.value === null) return
+
+  const confirmar = window.confirm(
+    `¿Eliminar la infracción de ${entrada.nombreEquipo} (−${entrada.puntosRestados} PTS)?`,
+  )
+  if (!confirmar) return
+
+  eliminandoSancion.value = true
+  try {
+    await eliminarSancionTorneo(torneoActivoId.value, entrada.id)
+    await cargarTablaAdmin()
+  } catch {
+    window.alert('No se pudo eliminar la infracción.')
+  } finally {
+    eliminandoSancion.value = false
+  }
 }
 
 async function confirmarSancion() {
@@ -483,6 +562,24 @@ async function confirmarSancion() {
                 </div>
                 <p class="mt-1 text-xs text-zinc-500">{{ formatearFechaLog(entrada.fecha) }}</p>
                 <p class="mt-2 text-sm text-zinc-300">{{ entrada.motivo }}</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="rounded-md border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+                    :disabled="guardandoSancion || eliminandoSancion"
+                    @click="abrirModalEditarInfraccion(entrada)"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-md border border-red-500/30 px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-500/10"
+                    :disabled="guardandoSancion || eliminandoSancion"
+                    @click="eliminarInfraccion(entrada)"
+                  >
+                    Eliminar
+                  </button>
+                </div>
               </li>
             </ul>
 
@@ -491,6 +588,96 @@ async function confirmarSancion() {
             </p>
           </div>
         </aside>
+      </div>
+    </Teleport>
+
+    <!-- Modal editar infracción -->
+    <Teleport to="body">
+      <div
+        v-if="modalEditarInfraccionAbierto && infraccionEditandoId !== null"
+        class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-modal-editar-infraccion"
+      >
+        <button
+          type="button"
+          class="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          aria-label="Cerrar"
+          @click="cerrarModalEditarInfraccion"
+        />
+
+        <div
+          class="relative z-10 w-full max-w-md rounded-xl border border-zinc-700/80 bg-zinc-900 p-6 shadow-2xl shadow-black/50"
+        >
+          <h3 id="titulo-modal-editar-infraccion" class="text-lg font-semibold text-white">
+            Editar infracción
+          </h3>
+          <p class="mt-1 text-sm text-zinc-400">Los cambios actualizan la tabla de posiciones al guardar.</p>
+
+          <form class="mt-5 space-y-4" @submit.prevent="confirmarEdicionInfraccion">
+            <div>
+              <label for="equipo-editar-infraccion" class="mb-1.5 block text-xs font-medium text-zinc-400">
+                Equipo
+              </label>
+              <select
+                id="equipo-editar-infraccion"
+                v-model.number="equipoEditarId"
+                required
+                class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-500/50 focus:ring-2 focus:ring-yellow-500/20"
+              >
+                <option v-for="equipo in equipos" :key="equipo.id" :value="equipo.id">
+                  {{ equipo.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label for="puntos-editar-infraccion" class="mb-1.5 block text-xs font-medium text-zinc-400">
+                Puntos descontados
+              </label>
+              <input
+                id="puntos-editar-infraccion"
+                v-model.number="puntosEditar"
+                type="number"
+                min="1"
+                step="1"
+                required
+                class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-500/50 focus:ring-2 focus:ring-yellow-500/20"
+              />
+            </div>
+
+            <div>
+              <label for="motivo-editar-infraccion" class="mb-1.5 block text-xs font-medium text-zinc-400">
+                Motivo
+              </label>
+              <textarea
+                id="motivo-editar-infraccion"
+                v-model="motivoEditar"
+                rows="4"
+                required
+                class="w-full resize-y rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-yellow-500/50 focus:ring-2 focus:ring-yellow-500/20"
+              />
+            </div>
+
+            <div class="flex flex-wrap justify-end gap-2 pt-2">
+              <button
+                type="button"
+                class="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                @click="cerrarModalEditarInfraccion"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                class="rounded-lg bg-gradient-to-b from-yellow-500 to-yellow-600 px-4 py-2 text-sm font-bold text-zinc-900 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="guardandoSancion"
+              >
+                {{ guardandoSancion ? 'Guardando…' : 'Guardar cambios' }}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </Teleport>
   </div>

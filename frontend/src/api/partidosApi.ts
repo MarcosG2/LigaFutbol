@@ -1,8 +1,9 @@
 import { solicitar } from './cliente'
 import type { EstadoPartidoApi, PartidoApi } from './tipos'
 
-export async function listarPartidos(): Promise<PartidoApi[]> {
-  return solicitar<PartidoApi[]>('/partidos')
+export async function listarPartidos(torneoId?: number): Promise<PartidoApi[]> {
+  const consulta = torneoId !== undefined ? `?torneo_id=${torneoId}` : ''
+  return solicitar<PartidoApi[]>(`/partidos${consulta}`)
 }
 
 export async function crearPartido(datos: {

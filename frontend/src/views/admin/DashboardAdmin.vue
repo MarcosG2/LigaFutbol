@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { estadioUrl } from '../../assets/imagenes'
-import { listarEquipos } from '../../api/equiposApi'
+import { cargarContextoTorneoActivo } from '../../composables/cargarContextoTorneoActivo'
 import {
   estadoPartidoApiAUi,
   formatearFechaDia,
@@ -9,7 +9,6 @@ import {
   mapaEquiposPorId,
   partidoConNombres,
 } from '../../api/mappers'
-import { listarPartidos } from '../../api/partidosApi'
 import { useTablaPosiciones } from '../../composables/useTablaPosiciones'
 
 type EquipoResumen = {
@@ -70,7 +69,7 @@ function actualizarRelojPanel() {
 
 async function cargarDashboard() {
   actualizarRelojPanel()
-  const [equipos, partidos] = await Promise.all([listarEquipos(), listarPartidos()])
+  const { equipos, partidos } = await cargarContextoTorneoActivo()
   const mapa = mapaEquiposPorId(equipos)
 
   const programados = partidos.filter((p) => p.estado === 'Pendiente').length

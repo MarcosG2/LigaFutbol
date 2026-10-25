@@ -7,6 +7,7 @@ import {
   esquemaGenerarPlayoffs,
   esquemaIdPartido,
 } from "../schemas/partidos.schema.js";
+import { esquemaIdTorneo } from "../schemas/torneos.schema.js";
 import * as fixtureGeneradorService from "../services/fixtureGenerador.service.js";
 import * as partidosService from "../services/partidos.service.js";
 import { intentarGenerarSiguienteRondaPlayoff } from "../services/playoffsAvance.service.js";
@@ -27,9 +28,19 @@ function parsearIdParam(req: Request, res: Response): number | null {
   return resultado.data;
 }
 
-export async function listarPartidos(_req: Request, res: Response): Promise<void> {
+export async function listarPartidos(req: Request, res: Response): Promise<void> {
+  let torneoId: number | undefined;
+  if (req.query.torneo_id !== undefined) {
+    const parseo = esquemaIdTorneo.safeParse(req.query.torneo_id);
+    if (!parseo.success) {
+      responderErrorValidacion(res, parseo.error);
+      return;
+    }
+    torneoId = parseo.data;
+  }
+
   try {
-    const partidos = await partidosService.listarPartidos();
+    const partidos = await partidosService.listarPartidos(torneoId);
     res.json(partidos);
   } catch (error) {
     console.error(error);

@@ -77,16 +77,22 @@ async function buscarPartidoPorId(id: number): Promise<Partido | null> {
   }
 }
 
-export async function listarPartidos(): Promise<Partido[]> {
+export async function listarPartidos(torneoId?: number): Promise<Partido[]> {
+  const filtroTorneo =
+    torneoId !== undefined ? " WHERE torneo_id = ?" : "";
+  const parametros = torneoId !== undefined ? [torneoId] : [];
+
   try {
     const [filas] = await pool.execute<RowDataPacket[]>(
-      `SELECT ${columnasSelect} FROM Partidos ${ordenListadoPartidos}`
+      `SELECT ${columnasSelect} FROM Partidos${filtroTorneo} ${ordenListadoPartidos}`,
+      parametros
     );
     return filas.map((fila) => filaAPartido(fila));
   } catch (error) {
     if (!esErrorColumnaFaltante(error, "es_playoff")) throw error;
     const [filas] = await pool.execute<RowDataPacket[]>(
-      `SELECT ${columnasSelectSinPlayoff} FROM Partidos ${ordenListadoPartidos}`
+      `SELECT ${columnasSelectSinPlayoff} FROM Partidos${filtroTorneo} ${ordenListadoPartidos}`,
+      parametros
     );
     return filas.map((fila) => filaAPartido(fila));
   }

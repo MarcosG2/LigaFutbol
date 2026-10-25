@@ -22,5 +22,18 @@ export const esquemaIdTorneo = z.coerce
   .int("El id debe ser un entero")
   .positive("El id debe ser mayor a cero");
 
+export const esquemaReemplazarEquipoTorneo = z.object({
+  equipo_saliente_id: z.coerce.number().int().positive(),
+  equipo_entrante_id: z.coerce.number().int().positive(),
+  jornada_retiro: z.coerce.number().int().positive(),
+});
+
+export const esquemaInscribirEquipoTorneo = z.object({
+  equipo_id: z.coerce.number().int().positive(),
+  joined_from_round: z.coerce.number().int().positive().optional().default(1),
+});
+
 export type DatosCrearTorneo = z.infer<typeof esquemaCrearTorneo>;
 export type DatosActualizarTorneo = z.infer<typeof esquemaActualizarTorneo>;
+export type DatosReemplazarEquipoTorneo = z.infer<typeof esquemaReemplazarEquipoTorneo>;
+export type DatosInscribirEquipoTorneo = z.infer<typeof esquemaInscribirEquipoTorneo>;

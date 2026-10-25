@@ -2,11 +2,16 @@
 import { computed, onMounted, ref } from 'vue'
 import { ErrorApi } from '../../api/cliente'
 import type { EstadoTorneo, TorneoApi } from '../../api/tipos'
+import { listarEquipos } from '../../api/equiposApi'
+import type { EquipoApi } from '../../api/tipos'
 import {
   actualizarTorneo,
   crearTorneo,
   eliminarTorneo,
+  inscribirEquipoEnTorneo,
+  listarEquiposDelTorneo,
   listarTorneos,
+  retirarEquipoDeTorneo,
 } from '../../api/torneosApi'
 
 const torneos = ref<TorneoApi[]>([])
@@ -22,6 +27,23 @@ const torneoEnEdicion = ref<{ id: number; nombre: string; estado: EstadoTorneo }
 
 const torneoActivo = computed(() => torneos.value.find((t) => t.estado === 'Activo') ?? null)
 
+const equiposCatalogo = ref<EquipoApi[]>([])
+const torneoEquiposExpandido = ref<number | null>(null)
+const equiposInscriptos = ref<EquipoApi[]>([])
+const cargandoEquiposTorneo = ref(false)
+const equipoSeleccionadoAgregar = ref<number | ''>('')
+
+const equiposDisponiblesParaInscribir = computed(() => {
+  const idsInscriptos = new Set(equiposInscriptos.value.map((equipo) => equipo.id))
+  return equiposCatalogo.value
+    .filter((equipo) => equipo.estado !== 'Inactivo' && !idsInscriptos.has(equipo.id))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+})
+
+function torneoEquiposAbierto(torneoId: number): boolean {
+  return torneoEquiposExpandido.value === torneoId
+}
+
 const tituloModal = computed(() =>
   torneoEnEdicion.value.id ? 'Editar torneo' : 'Nuevo torneo',
 )
@@ -30,10 +52,81 @@ function torneoVacio() {
   return { id: 0, nombre: '', estado: 'Activo' as EstadoTorneo }
 }
 
+async function cargarEquiposTorneo(torneoId: number) {
+  cargandoEquiposTorneo.value = true
+  try {
+    equiposInscriptos.value = await listarEquiposDelTorneo(torneoId)
+  } catch (error) {
+    window.alert(mensajeErrorApi(error))
+    equiposInscriptos.value = []
+  } finally {
+    cargandoEquiposTorneo.value = false
+  }
+}
+
+async function alternarEquiposTorneo(torneo: TorneoApi) {
+  if (torneoEquiposExpandido.value === torneo.id) {
+    torneoEquiposExpandido.value = null
+    equiposInscriptos.value = []
+    equipoSeleccionadoAgregar.value = ''
+    return
+  }
+  torneoEquiposExpandido.value = torneo.id
+  equipoSeleccionadoAgregar.value = ''
+  await cargarEquiposTorneo(torneo.id)
+}
+
+async function cargarCatalogoEquipos() {
+  try {
+    equiposCatalogo.value = await listarEquipos()
+  } catch (error) {
+    window.alert(mensajeErrorApi(error))
+    equiposCatalogo.value = []
+  }
+}
+
+async function agregarEquipoAlTorneo(torneo: TorneoApi) {
+  if (equipoSeleccionadoAgregar.value === '') return
+  guardando.value = true
+  try {
+    await inscribirEquipoEnTorneo(torneo.id, Number(equipoSeleccionadoAgregar.value))
+    equipoSeleccionadoAgregar.value = ''
+    await cargarEquiposTorneo(torneo.id)
+  } catch (error) {
+    window.alert(mensajeErrorApi(error))
+  } finally {
+    guardando.value = false
+  }
+}
+
+async function quitarEquipoDelTorneo(equipo: EquipoApi, torneo: TorneoApi) {
+  const confirmar = window.confirm(
+    `¿Quitar a «${equipo.nombre}» del torneo «${torneo.nombre}»? El club y su plantilla siguen guardados en el catálogo.`,
+  )
+  if (!confirmar) return
+
+  guardando.value = true
+  try {
+    await retirarEquipoDeTorneo(torneo.id, equipo.id)
+    await cargarEquiposTorneo(torneo.id)
+  } catch (error) {
+    window.alert(mensajeErrorApi(error))
+  } finally {
+    guardando.value = false
+  }
+}
+
 async function recargarTorneos() {
   cargando.value = true
   try {
     torneos.value = await listarTorneos()
+    const idExpandido = torneoEquiposExpandido.value
+    if (idExpandido && torneos.value.some((t) => t.id === idExpandido)) {
+      await cargarEquiposTorneo(idExpandido)
+    } else {
+      torneoEquiposExpandido.value = null
+      equiposInscriptos.value = []
+    }
   } catch (error) {
     const mensaje =
       error instanceof Error ? error.message : 'No se pudieron cargar los torneos.'
@@ -44,6 +137,7 @@ async function recargarTorneos() {
 }
 
 onMounted(() => {
+  void cargarCatalogoEquipos()
   recargarTorneos()
 })
 
@@ -59,6 +153,10 @@ function abrirEditarTorneo(torneo: TorneoApi) {
     estado: torneo.estado ?? 'Activo',
   }
   modalAbierto.value = true
+  if (torneo.id) {
+    torneoEquiposExpandido.value = torneo.id
+    void cargarEquiposTorneo(torneo.id)
+  }
 }
 
 function cerrarModal() {
@@ -177,7 +275,8 @@ function clasesEstado(estado: EstadoTorneo | null): string {
           Gestión del <span class="text-yellow-400">torneo</span>
         </h2>
         <p class="mt-2 text-sm text-zinc-400 sm:text-base">
-          Creá el torneo de la liga. Los partidos del fixture se vinculan al torneo
+          Gestioná torneos y equipos inscriptos desde la tabla (flecha o botón
+          <strong class="font-medium text-zinc-300">Equipos</strong>). El fixture usa el torneo
           <strong class="font-medium text-zinc-300">Activo</strong>.
         </p>
       </div>
@@ -203,27 +302,7 @@ function clasesEstado(estado: EstadoTorneo | null): string {
     </header>
 
     <section
-      v-if="torneoActivo"
-      class="rounded-xl border border-green-500/25 bg-green-500/5 px-5 py-4"
-    >
-      <p class="text-xs font-semibold tracking-wide text-green-400/90 uppercase">
-        Torneo en curso
-      </p>
-      <p class="mt-1 text-lg font-semibold text-white">{{ torneoActivo.nombre }}</p>
-      <p class="mt-1 text-sm text-zinc-400">
-        Desde acá podés cargar fechas en
-        <RouterLink to="/admin/partidos" class="text-yellow-400 hover:text-yellow-300">
-          Partidos
-        </RouterLink>
-        y ver la tabla en
-        <RouterLink to="/admin/tabla" class="text-yellow-400 hover:text-yellow-300">
-          Tabla de posiciones
-        </RouterLink>.
-      </p>
-    </section>
-
-    <section
-      v-else-if="!cargando"
+      v-if="!torneoActivo && !cargando"
       class="rounded-xl border border-amber-500/30 bg-amber-500/5 px-5 py-4"
     >
       <p class="text-sm font-medium text-amber-200">
@@ -266,45 +345,207 @@ function clasesEstado(estado: EstadoTorneo | null): string {
           </tr>
         </thead>
         <tbody class="divide-y divide-zinc-800/60">
-          <tr v-for="torneo in torneos" :key="torneo.id" class="text-zinc-200">
-            <td class="px-5 py-4 font-medium text-white">{{ torneo.nombre }}</td>
-            <td class="px-5 py-4">
-              <span
-                class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                :class="clasesEstado(torneo.estado)"
-              >
-                {{ torneo.estado ?? '—' }}
-              </span>
-            </td>
-            <td class="px-5 py-4">
-              <div class="flex flex-wrap justify-end gap-2">
-                <button
-                  v-if="torneo.estado !== 'Activo'"
-                  type="button"
-                  class="rounded-lg border border-green-500/40 px-3 py-1.5 text-xs font-semibold text-green-400 transition-colors hover:bg-green-500/10"
-                  :disabled="guardando"
-                  @click="marcarComoActivo(torneo)"
+          <template v-for="torneo in torneos" :key="torneo.id">
+            <tr
+              class="text-zinc-200"
+              :class="torneoEquiposAbierto(torneo.id) ? 'bg-zinc-800/20' : ''"
+            >
+              <td class="px-5 py-4">
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-700/80 text-zinc-400 transition-colors hover:border-yellow-500/40 hover:text-yellow-400"
+                    :aria-expanded="torneoEquiposAbierto(torneo.id)"
+                    :aria-label="
+                      torneoEquiposAbierto(torneo.id)
+                        ? `Ocultar equipos de ${torneo.nombre}`
+                        : `Ver equipos de ${torneo.nombre}`
+                    "
+                    @click="alternarEquiposTorneo(torneo)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="h-4 w-4 transition-transform"
+                      :class="torneoEquiposAbierto(torneo.id) ? 'rotate-180' : ''"
+                      aria-hidden="true"
+                    >
+                      <path stroke-linecap="round" d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  <span class="font-medium text-white">{{ torneo.nombre }}</span>
+                </div>
+              </td>
+              <td class="px-5 py-4">
+                <span
+                  class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                  :class="clasesEstado(torneo.estado)"
                 >
-                  Activar
-                </button>
-                <button
-                  type="button"
-                  class="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
-                  @click="abrirEditarTorneo(torneo)"
+                  {{ torneo.estado ?? '—' }}
+                </span>
+              </td>
+              <td class="px-5 py-4">
+                <div class="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    class="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-sky-300 transition-colors hover:border-sky-500/40 hover:bg-sky-500/10"
+                    :disabled="guardando"
+                    @click="alternarEquiposTorneo(torneo)"
+                  >
+                    {{ torneoEquiposAbierto(torneo.id) ? 'Ocultar equipos' : 'Equipos' }}
+                  </button>
+                  <button
+                    v-if="torneo.estado !== 'Activo'"
+                    type="button"
+                    class="rounded-lg border border-green-500/40 px-3 py-1.5 text-xs font-semibold text-green-400 transition-colors hover:bg-green-500/10"
+                    :disabled="guardando"
+                    @click="marcarComoActivo(torneo)"
+                  >
+                    Activar
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+                    @click="abrirEditarTorneo(torneo)"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10"
+                    :disabled="guardando"
+                    @click="eliminarTorneoConfirmado(torneo)"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="torneoEquiposAbierto(torneo.id)">
+              <td colspan="3" class="p-0">
+                <div
+                  class="border-t border-zinc-800/80 bg-zinc-950/50 px-5 py-4"
+                  :id="`equipos-torneo-${torneo.id}`"
                 >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  class="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10"
-                  :disabled="guardando"
-                  @click="eliminarTorneoConfirmado(torneo)"
-                >
-                  Eliminar
-                </button>
-              </div>
-            </td>
-          </tr>
+                  <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <h4 class="text-sm font-semibold text-white">
+                        Equipos inscriptos
+                      </h4>
+                      <p class="mt-0.5 text-xs text-zinc-500">
+                        <template v-if="torneo.estado === 'Activo'">
+                          Visibles en
+                          <RouterLink
+                            to="/equipos"
+                            class="text-yellow-400/90 hover:text-yellow-300"
+                          >
+                            Equipos (público)
+                          </RouterLink>
+                          ·
+                        </template>
+                        Reutilizá clubes del catálogo sin volver a cargar plantillas.
+                      </p>
+                    </div>
+                    <span
+                      v-if="!cargandoEquiposTorneo"
+                      class="text-xs font-medium text-zinc-400 tabular-nums"
+                    >
+                      {{ equiposInscriptos.length }} inscripto(s)
+                    </span>
+                  </div>
+
+                  <div
+                    class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end"
+                  >
+                    <div class="min-w-0 flex-1">
+                      <label
+                        :for="`agregar-equipo-${torneo.id}`"
+                        class="mb-1.5 block text-xs font-medium text-zinc-400"
+                      >
+                        Agregar del catálogo
+                      </label>
+                      <select
+                        :id="`agregar-equipo-${torneo.id}`"
+                        v-model="equipoSeleccionadoAgregar"
+                        class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-sm text-white focus:border-yellow-500/50 focus:outline-none focus:ring-2 focus:ring-yellow-500/20"
+                        :disabled="
+                          guardando ||
+                          cargandoEquiposTorneo ||
+                          equiposDisponiblesParaInscribir.length === 0
+                        "
+                      >
+                        <option value="">
+                          {{
+                            equiposDisponiblesParaInscribir.length === 0
+                              ? 'No hay más equipos activos para agregar'
+                              : 'Elegí un equipo…'
+                          }}
+                        </option>
+                        <option
+                          v-for="equipo in equiposDisponiblesParaInscribir"
+                          :key="equipo.id"
+                          :value="equipo.id"
+                        >
+                          {{ equipo.nombre }}
+                        </option>
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      class="shrink-0 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-4 py-2.5 text-sm font-semibold text-yellow-400 transition-colors hover:bg-yellow-500/20 disabled:opacity-50"
+                      :disabled="
+                        guardando ||
+                        cargandoEquiposTorneo ||
+                        equipoSeleccionadoAgregar === ''
+                      "
+                      @click="agregarEquipoAlTorneo(torneo)"
+                    >
+                      Inscribir
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="cargandoEquiposTorneo"
+                    class="py-8 text-center text-sm text-zinc-500"
+                  >
+                    Cargando equipos…
+                  </div>
+                  <ul
+                    v-else-if="equiposInscriptos.length > 0"
+                    class="divide-y divide-zinc-800/60 rounded-lg border border-zinc-800/80"
+                  >
+                    <li
+                      v-for="equipo in equiposInscriptos"
+                      :key="equipo.id"
+                      class="flex items-center justify-between gap-3 bg-zinc-900/40 px-4 py-2.5 first:rounded-t-lg last:rounded-b-lg"
+                    >
+                      <span class="text-sm font-medium text-white">{{ equipo.nombre }}</span>
+                      <button
+                        type="button"
+                        class="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition-colors hover:border-red-500/40 hover:text-red-400"
+                        :disabled="guardando"
+                        @click="quitarEquipoDelTorneo(equipo, torneo)"
+                      >
+                        Quitar
+                      </button>
+                    </li>
+                  </ul>
+                  <p v-else class="py-6 text-center text-sm text-zinc-500">
+                    Sin equipos inscriptos.
+                    <RouterLink
+                      to="/admin/equipos"
+                      class="text-yellow-400/90 hover:text-yellow-300"
+                    >
+                      Catálogo de clubes
+                    </RouterLink>
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>

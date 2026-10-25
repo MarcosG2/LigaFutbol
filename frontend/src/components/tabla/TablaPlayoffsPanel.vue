@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { mapaEquiposPorId } from '../../api/mappers'
-import { listarEquipos } from '../../api/equiposApi'
-import { listarPartidos } from '../../api/partidosApi'
+import { cargarContextoTorneoActivo } from '../../composables/cargarContextoTorneoActivo'
 import EscudoEquipo from '../EscudoEquipo.vue'
 import { construirCuadroPlayoffs } from '../../utils/cuadroPlayoffs'
 
@@ -20,7 +19,7 @@ async function cargar() {
   cargando.value = true
   error.value = ''
   try {
-    const [partidos, equipos] = await Promise.all([listarPartidos(), listarEquipos()])
+    const { partidos, equipos } = await cargarContextoTorneoActivo()
     const equiposPorId = mapaEquiposPorId(equipos)
     const resultado = construirCuadroPlayoffs(partidos, equiposPorId)
     rondas.value = resultado.rondas
